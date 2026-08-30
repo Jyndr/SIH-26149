@@ -62,11 +62,23 @@ class ContiguousCarver(CarvingStrategy):
         fmt_def = registry.get(candidate.format_name)
         ext = fmt_def.extensions[0] if fmt_def.extensions else ".bin"
 
-        # Determine size to carve
+        # A validated header is not sufficient evidence of a complete file.
+        # Never turn an unknown boundary into a max-sized artifact: doing so
+        # creates large false positives from isolated signatures in disk data.
         carve_size = candidate.estimated_size
         if carve_size <= 0:
-            carve_size = self.max_carve_size
-        carve_size = min(carve_size, self.max_carve_size)
+            return CarvingResult(
+                success=False, artifact_id=artifact_id,
+                format_name=candidate.format_name, offset=candidate.offset,
+                error="Validator did not establish a file boundary",
+            )
+        if carve_size > self.max_carve_size:
+            return CarvingResult(
+                success=False, artifact_id=artifact_id,
+                format_name=candidate.format_name, offset=candidate.offset,
+                error=(f"Validated size {carve_size} exceeds configured carve limit "
+                       f"{self.max_carve_size}"),
+            )
 
         # Also clamp to available data
         available = reader.size - candidate.offset
@@ -110,7 +122,7 @@ class ContiguousCarver(CarvingStrategy):
             end_offset=candidate.offset + bytes_written,
             size=bytes_written,
             output_path=str(out_path),
-            is_complete=candidate.estimated_size > 0 and bytes_written >= candidate.estimated_size,
+            is_complete=bytes_written == candidate.estimated_size,
         )
 
 
