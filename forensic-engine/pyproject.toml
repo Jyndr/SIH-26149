@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "forensic-engine"
+version = "0.1.0"
+description = "Integrated digital forensics and secure data sanitization engine"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+ewf = ["libewf-python"]
+dev = ["pytest>=7.0", "pytest-cov>=4.0"]
+
+[project.scripts]
+forensic-engine = "cli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["core*", "cli*", "formats*"]
+
+[tool.setuptools.package-data]
+formats = ["*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

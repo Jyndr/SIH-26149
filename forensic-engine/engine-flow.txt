@@ -1,0 +1,445 @@
+FORENSIC ENGINE + EXPRESS BACKEND INTEGRATION FLOW
+==================================================
+
+Purpose
+-------
+This document explains how the frontend, Express backend, MongoDB, and Python
+forensic engine should communicate.
+
+Overall architecture
+--------------------
+
+Frontend
+   |
+   | HTTP requests: create case, upload evidence, start recovery,
+   | check status, list results, and download recovered files
+   v
+Express backend
+   |-- MongoDB: stores cases, evidence records, recovery jobs, and results
+   |-- File storage: stores uploaded evidence and recovered artifacts
+   `-- Python forensic engine: analyzes an evidence image and writes report.json
+
+The frontend must never invoke the Python engine directly. Express is the bridge
+between the frontend, database, filesystem, and engine.
+
+
+1. CREATE A CASE
+----------------
+
+Request:
+
+POST /api/cases
+Content-Type: application/json
+
+{
+  "title": "Laptop Investigation",
+  "description": "Recover deleted documents"
+}
+
+Express should generate a public case ID such as CASE-001 and save the case using
+model/CaseSchema.js.
+
+Example response:
+
+{
+  "success": true,
+  "data": {
+    "id": "mongodb-object-id",
+    "caseId": "CASE-001",
+    "title": "Laptop Investigation",
+    "status": "active"
+  }
+}
+
+There are two different case identifiers:
+
+- case._id is MongoDB's ObjectId and is used for relationships in MongoDB.
+- case.caseId is the public string, such as CASE-001, passed to Python.
+
+
+2. UPLOAD EVIDENCE
+------------------
+
+Request:
+
+POST /api/cases/CASE-001/evidence
+Content-Type: multipart/form-data
+
+Form field:
+
+evidence = evidence.img
+
+Use multer in Express to receive the file. Do not send a disk image as JSON or
+Base64. Large evidence files must be sent as multipart/form-data.
+
+Express should:
+
+1. Find the case using caseId: "CASE-001".
+2. Save the uploaded evidence in a controlled evidence directory.
+3. Keep the evidence directory separate from the recovered-output directory.
+4. Calculate its SHA-256 hash, or use the hash later produced by the engine.
+5. Generate a public evidence ID such as EVD-001.
+6. Create an Evidence document using model/EvidenceSchema.js.
+
+Example response:
+
+{
+  "success": true,
+  "data": {
+    "evidenceId": "EVD-001",
+    "filename": "evidence.img",
+    "size": 104857600,
+    "sha256": "sha256-value",
+    "analysisStatus": "pending"
+  }
+}
+
+
+3. START A RECOVERY JOB
+-----------------------
+
+Request:
+
+POST /api/evidence/EVD-001/recoveries
+Content-Type: application/json
+
+Optional body:
+
+{
+  "chunkSize": 4194304,
+  "maxCarveSize": 104857600
+}
+
+Express should:
+
+1. Find Evidence using evidenceId: "EVD-001".
+2. Find its associated Case using the MongoDB case ObjectId.
+3. Create a Recovery document with a public recoveryId such as REC-001.
+4. Set Recovery.status to "queued".
+5. Return HTTP 202 Accepted immediately.
+6. Run the Python process in the background.
+
+Example immediate response:
+
+HTTP 202 Accepted
+
+{
+  "success": true,
+  "data": {
+    "recoveryId": "REC-001",
+    "status": "queued"
+  }
+}
+
+Analysis can take a long time. Do not keep the HTTP request open until it
+finishes. The frontend should poll a status endpoint instead.
+
+
+4. RUN THE PYTHON ENGINE
+------------------------
+
+Install the engine during backend setup:
+
+cd forensic-engine
+python -m pip install -e .
+
+Express should invoke the installed CLI like this:
+
+forensic-engine analyze /absolute/path/evidence.img \
+  --case-id CASE-001 \
+  --output /absolute/path/recovered \
+  --report /absolute/path/recovered/CASE-001/report.json
+
+Use Node's child_process.spawn(), not exec(). Pass every argument separately:
+
+spawn("forensic-engine", [
+  "analyze",
+  evidence.storagePath,
+  "--case-id",
+  caseRecord.caseId,
+  "--output",
+  recoveryOutputDirectory,
+  "--report",
+  reportPath
+]);
+
+Passing arguments as an array prevents filenames or IDs from being interpreted as
+shell commands.
+
+Before starting the process, update:
+
+- Evidence.analysisStatus = "processing"
+- Recovery.status = "processing"
+- Recovery.startedAt = the current time
+
+Capture stdout, stderr, and the process exit code. Do not treat stdout as the
+analysis result. The authoritative structured result is report.json.
+
+If the process exits with code 0, read and parse report.json. If it exits with a
+non-zero code, set Evidence.analysisStatus and Recovery.status to "failed" and
+record a safe error message in an audit record or server log.
+
+
+5. ENGINE OUTPUT
+----------------
+
+By default, recovered artifacts and the report are written under:
+
+<output>/<case-id>/
+
+The JSON report has this shape:
+
+{
+  "schema_version": "1.0",
+  "evidence": {
+    "source_path": "/path/evidence.img",
+    "image_type": "raw",
+    "size": 104857600,
+    "sha256": "sha256-value",
+    "case_id": "CASE-001",
+    "acquired_at": null,
+    "acquisition_metadata": {},
+    "analysis_started_at": "ISO-8601 timestamp",
+    "analysis_ended_at": "ISO-8601 timestamp",
+    "status": "complete",
+    "tool": "forensic-engine/0.1.0",
+    "runtime": "Python version"
+  },
+  "partition_analysis": {},
+  "filesystem_analysis": [],
+  "artifacts": [
+    {
+      "artifact_id": "uuid",
+      "format": "png",
+      "category": "image",
+      "mime_type": "image/png",
+      "offset": 4096,
+      "size": 25000,
+      "sha256": "sha256-value",
+      "md5": "md5-value",
+      "confidence_score": 0.95,
+      "confidence_factors": {},
+      "recovery_method": "carving",
+      "output_path": "/path/recovered/CASE-001/uuid.png",
+      "is_complete": true,
+      "is_fragmented": false,
+      "validation_details": "validation information",
+      "metadata": {}
+    }
+  ],
+  "statistics": {
+    "signature_candidates": 5,
+    "validated_candidates": 2,
+    "recovered_artifacts": 2
+  },
+  "warnings": []
+}
+
+
+6. SAVE THE REPORT TO MONGODB
+-----------------------------
+
+After reading report.json, update the Recovery record:
+
+- totalFilesDetected = report.statistics.signature_candidates
+- filesRecovered = report.statistics.recovered_artifacts
+- filesCarved = the number of artifacts whose recovery_method is "carving"
+- filesFailed = an appropriate count derived from failed carving warnings, if used
+- status = "completed"
+- completedAt = the current time
+
+Also update Evidence.analysisStatus to "completed".
+
+Create one RecoveryResult document for every item in report.artifacts.
+
+Python-to-MongoDB field mapping:
+
+report.artifacts[].artifact_id       -> artifactId (recommended new field)
+report.artifacts[].format            -> fileType
+report.artifacts[].size              -> size
+report.artifacts[].recovery_method   -> recoveryMethod
+report.artifacts[].sha256            -> sha256
+report.artifacts[].output_path       -> storagePath
+report.artifacts[].confidence_score  -> confidence
+
+Important: Python confidence_score is between 0 and 1, but RecoveryRes.js expects
+confidence between 0 and 100. Save confidence_score * 100.
+
+Suggested status mapping:
+
+- is_complete = true  -> "valid"
+- is_complete = false -> "partial"
+- a failed validation -> "corrupted" or "failed", depending on the failure
+
+RecoveryResult.recoveryId must contain the MongoDB Recovery._id ObjectId, not the
+public string REC-001.
+
+The current RecoveryResult schema does not contain artifactId, MIME type, MD5,
+offset, category, confidence factors, validation details, or metadata. Add these
+fields if the frontend needs the full forensic report.
+
+
+7. CHECK RECOVERY STATUS
+------------------------
+
+Request:
+
+GET /api/recoveries/REC-001
+
+Example response:
+
+{
+  "success": true,
+  "data": {
+    "recoveryId": "REC-001",
+    "status": "completed",
+    "totalFilesDetected": 5,
+    "filesRecovered": 2,
+    "filesCarved": 2,
+    "filesFailed": 0,
+    "startedAt": "ISO-8601 timestamp",
+    "completedAt": "ISO-8601 timestamp"
+  }
+}
+
+The frontend can poll this endpoint every two or three seconds until status is
+"completed" or "failed".
+
+The engine CLI does not currently publish percentage progress. The first backend
+version should expose honest state changes:
+
+queued -> processing -> completed
+                    `-> failed
+
+Do not invent a progress percentage.
+
+
+8. LIST RECOVERED RESULTS
+-------------------------
+
+Request:
+
+GET /api/recoveries/REC-001/results
+
+Example response:
+
+{
+  "success": true,
+  "data": [
+    {
+      "id": "result-mongodb-id",
+      "filename": "recovered-image.png",
+      "fileType": "png",
+      "size": 25000,
+      "recoveryMethod": "carving",
+      "status": "valid",
+      "confidence": 95,
+      "sha256": "sha256-value",
+      "downloadUrl": "/api/recovery-results/result-mongodb-id/download"
+    }
+  ]
+}
+
+Return a download URL, not storagePath. Internal filesystem paths must not be sent
+to the browser.
+
+
+9. DOWNLOAD A RECOVERED FILE
+----------------------------
+
+Request:
+
+GET /api/recovery-results/:resultId/download
+
+Express should:
+
+1. Find the RecoveryResult by its MongoDB ID.
+2. Confirm that the current user is allowed to access its case.
+3. Resolve and validate storagePath against the configured recovery directory.
+4. Confirm the file exists.
+5. Send it with res.download() or res.sendFile().
+
+Example:
+
+res.download(result.storagePath, result.filename);
+
+Never accept an arbitrary path from a query parameter. The path must always come
+from a trusted database record and still be validated against the allowed root.
+
+
+10. RECOMMENDED ENDPOINTS
+-------------------------
+
+POST   /api/cases
+GET    /api/cases
+GET    /api/cases/:caseId
+
+POST   /api/cases/:caseId/evidence
+GET    /api/cases/:caseId/evidence
+
+POST   /api/evidence/:evidenceId/recoveries
+GET    /api/recoveries/:recoveryId
+GET    /api/recoveries/:recoveryId/results
+GET    /api/recoveries/:recoveryId/report
+
+GET    /api/recovery-results/:resultId/download
+
+
+11. IMPORTANT IMPLEMENTATION AND SECURITY RULES
+-----------------------------------------------
+
+- Validate caseId before sending it to Python. The engine rejects empty IDs,
+  slashes, backslashes, ".", and "..".
+- Generate evidenceId and recoveryId on the server; do not trust client-generated
+  identifiers.
+- Restrict allowed evidence extensions and enforce an upload-size policy.
+- Generate safe stored filenames instead of using the user's original filename.
+- Keep originalFilename separately for display if needed.
+- Keep evidence input and recovery output in different directories. The engine
+  explicitly rejects an output directory equal to the evidence directory.
+- Do not modify the evidence after upload. The engine opens evidence read-only and
+  records its SHA-256 for integrity verification.
+- Never expose evidence.storagePath or result.storagePath through API responses.
+- Use spawn() with an argument array and do not use shell: true.
+- Do not construct shell command strings using user input.
+- Limit how many analysis processes may run concurrently.
+- On backend restart, detect jobs left in "processing" and mark or retry them
+  according to a defined recovery policy.
+- Save audit events for uploads, analysis start, analysis completion/failure,
+  result downloads, and case closure.
+- E01 files require the optional Python dependency installed with:
+  python -m pip install -e '.[ewf]'
+
+
+12. CURRENT REPOSITORY STATUS
+-----------------------------
+
+- index.js is empty, so the Express server and routes still need to be built.
+- package.json currently has MongoDB and Mongoose but not Express or Multer.
+- The MongoDB models are under the repository-level model directory.
+- The Python analysis and recovery engine is under forensic-engine.
+- SanitizationSchema.js describes database state, but the current Python engine
+  implements read-only analysis and recovery, not sanitization.
+- The engine supports RAW images directly. Split EWF/E01 support requires pyewf.
+- The engine recovers validated contiguous artifacts. Fragment reconstruction is
+  not currently represented as successful recovery.
+
+
+COMPLETE REQUEST/OUTPUT SUMMARY
+-------------------------------
+
+1. Frontend sends case JSON to Express.
+2. Frontend uploads evidence to Express using multipart/form-data.
+3. Express stores the file and its MongoDB Evidence record.
+4. Frontend asks Express to start recovery using evidenceId.
+5. Express creates a Recovery job and starts the Python CLI with local paths.
+6. Python reads the evidence without modifying it.
+7. Python writes recovered files and report.json under <output>/<case-id>/.
+8. Express parses report.json and saves RecoveryResult documents.
+9. Frontend polls Express for job status and requests result metadata.
+10. Frontend downloads a result through an Express endpoint.
+
+In short: the frontend sends files and IDs to Express; Express owns database
+records and filesystem paths; Python receives safe local paths and produces files
+plus report.json; Express converts the report into safe JSON responses and
+controlled download URLs.
