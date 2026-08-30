@@ -54,9 +54,16 @@ class ForensicPipeline:
                 # RIFF and ZIP container signatures map to several definitions. Structural
                 # validation resolves them; this key prevents carving the same bytes twice.
                 accepted = set()
+                recovered_ranges: dict[str, list[tuple[int, int]]] = {}
                 carver = Carver(self.config.max_carve_size, self.config.chunk_size)
                 classifier = FileClassifier(self.registry)
                 for candidate in candidates:
+                    # Frame-based formats expose a signature at every frame.
+                    # Avoid recovering candidates nested inside an artifact of
+                    # the same format that was already recovered.
+                    if any(start <= candidate.offset < end for start, end in
+                           recovered_ranges.get(candidate.format_name, [])):
+                        continue
                     result = validate_candidate(reader, candidate.offset,
                                                 candidate.format_name, self.registry)
                     key = (result.offset, result.format_name)
@@ -67,6 +74,8 @@ class ForensicPipeline:
                     carved = carver.carve(reader, result, output, case_id, self.registry)
                     if carved.success:
                         artifacts.append(classifier.classify(carved, result))
+                        recovered_ranges.setdefault(candidate.format_name, []).append(
+                            (carved.offset, carved.end_offset))
                     else:
                         warnings.append(f"Carve failed at {result.offset}: {carved.error}")
             self.evidence_manager.finish(evidence)
