@@ -4,13 +4,29 @@
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: #0F0F10;
+  color: #e4e2e4;
 }
 
 #root {
   min-height: 100vh;
+}
+
+/* Custom ForensicGuard Styles */
+.glow-active {
+  box-shadow: inset 0 0 8px rgba(170, 199, 255, 0.2);
+}
+
+.anim-pulse {
+  animation: pulse-op 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse-op {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }

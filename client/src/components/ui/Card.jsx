@@ -3,7 +3,7 @@ import React from 'react';
 const Card = ({ children, className = '', hover = false, ...props }) => {
   return (
     <div
-      className={`bg-white rounded-xl shadow-lg border border-gray-100 ${hover ? 'hover:shadow-2xl hover:-translate-y-1 transition-all duration-300' : 'transition-shadow duration-200'} ${className}`}
+      className={`bg-[#1C1C1E] border border-[#2C2C2E] rounded ${hover ? 'hover:shadow-glow-primary transition-all duration-300' : 'transition-shadow duration-200'} ${className}`}
       {...props}
     >
       {children}
@@ -13,7 +13,7 @@ const Card = ({ children, className = '', hover = false, ...props }) => {
 
 const CardHeader = ({ children, className = '' }) => {
   return (
-    <div className={`px-6 py-4 border-b border-gray-100 bg-gray-50/50 ${className}`}>
+    <div className={`px-md py-sm border-b border-[#2C2C2E] bg-[#131315] ${className}`}>
       {children}
     </div>
   );
@@ -21,7 +21,7 @@ const CardHeader = ({ children, className = '' }) => {
 
 const CardBody = ({ children, className = '' }) => {
   return (
-    <div className={`px-6 py-5 ${className}`}>
+    <div className={`p-md ${className}`}>
       {children}
     </div>
   );
@@ -29,7 +29,7 @@ const CardBody = ({ children, className = '' }) => {
 
 const CardFooter = ({ children, className = '' }) => {
   return (
-    <div className={`px-6 py-4 border-t border-gray-100 bg-gray-50/50 rounded-b-2xl ${className}`}>
+    <div className={`px-md py-sm border-t border-[#2C2C2E] bg-[#131315] rounded-b ${className}`}>
       {children}
     </div>
   );

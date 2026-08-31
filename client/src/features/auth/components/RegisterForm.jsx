@@ -32,16 +32,18 @@ const RegisterForm = () => {
   };
 
   return (
-    <Card className="max-w-md mx-auto">
-      <Card.Header>
-        <h1 className="text-2xl font-bold text-center">Register</h1>
-        <p className="text-center text-gray-600 text-sm mt-2">
-          Create an account to access the forensic tool
-        </p>
-      </Card.Header>
-      <Card.Body>
-        <form onSubmit={handleSubmit}>
-          <FormField label="Name" error={error}>
+    <Card className="max-w-md">
+      {error && (
+        <div className="mb-4 p-3 bg-error/10 border border-error rounded flex items-center space-x-2">
+          <span className="material-symbols-outlined text-error text-[20px]">error</span>
+          <span className="text-error text-sm font-medium">{error}</span>
+        </div>
+      )}
+      
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <FormField label="Full Name">
+          <div className="relative">
+            <span className="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-outline-variant">person</span>
             <FormField.Input
               type="text"
               name="name"
@@ -49,62 +51,70 @@ const RegisterForm = () => {
               onChange={handleChange}
               placeholder="Enter your full name"
               required
+              className="pl-xl bg-surface-container-low border border-outline-variant text-on-surface placeholder:text-outline-variant focus:border-primary focus:ring-1 focus:ring-primary font-code-md"
             />
-          </FormField>
+          </div>
+        </FormField>
 
-          <FormField label="Email">
+        <FormField label="Email Address">
+          <div className="relative">
+            <span className="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-outline-variant">email</span>
             <FormField.Input
               type="email"
               name="email"
               value={formData.email}
               onChange={handleChange}
-              placeholder="Enter your email"
+              placeholder="name@company.com"
               required
+              className="pl-xl bg-surface-container-low border border-outline-variant text-on-surface placeholder:text-outline-variant focus:border-primary focus:ring-1 focus:ring-primary font-code-md"
             />
-          </FormField>
+          </div>
+        </FormField>
 
-          <FormField label="Password">
+        <FormField label="Password">
+          <div className="relative">
+            <span className="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-outline-variant">lock</span>
             <FormField.Input
               type="password"
               name="password"
               value={formData.password}
               onChange={handleChange}
-              placeholder="Enter your password"
+              placeholder="••••••••"
               required
               minLength={6}
+              className="pl-xl bg-surface-container-low border border-outline-variant text-on-surface placeholder:text-outline-variant focus:border-primary focus:ring-1 focus:ring-primary font-code-md"
             />
-          </FormField>
+          </div>
+        </FormField>
 
-          <FormField label="Role">
-            <FormField.Select
-              name="role"
-              value={formData.role}
-              onChange={handleChange}
-            >
-              <option value="INVESTIGATOR">Investigator</option>
-              <option value="ADMIN">Admin</option>
-            </FormField.Select>
-          </FormField>
-
-          <Button
-            type="submit"
-            variant="primary"
-            className="w-full mt-4"
-            disabled={loading}
+        <FormField label="Role">
+          <FormField.Select
+            name="role"
+            value={formData.role}
+            onChange={handleChange}
+            className="bg-surface-container-low border border-outline-variant text-on-surface focus:border-primary focus:ring-1 focus:ring-primary font-code-md"
           >
-            {loading ? <Spinner size="sm" /> : 'Register'}
-          </Button>
-        </form>
+            <option value="INVESTIGATOR">Investigator</option>
+            <option value="ADMIN">Admin</option>
+          </FormField.Select>
+        </FormField>
 
-        <div className="mt-6 text-center">
-          <p className="text-sm text-gray-600">
-            Already have an account?{' '}
-            <Link to="/login" className="text-primary-600 hover:text-primary-700 font-medium">
-              Login
-            </Link>
-          </p>
-        </div>
-      </Card.Body>
+        <Button
+          type="submit"
+          variant="primary"
+          className="w-full mt-6 font-label-caps text-label-caps uppercase"
+          disabled={loading}
+        >
+          {loading ? (
+            <span className="flex items-center justify-center">
+              <Spinner size="sm" />
+              <span className="ml-2">Creating Account...</span>
+            </span>
+          ) : (
+            'Register'
+          )}
+        </Button>
+      </form>
     </Card>
   );
 };
