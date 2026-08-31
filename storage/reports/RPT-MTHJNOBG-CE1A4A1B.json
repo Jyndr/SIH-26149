@@ -1,0 +1,29 @@
+{
+  "reportVersion": 1,
+  "reportType": "CASE_SUMMARY",
+  "generatedAt": "2026-08-31T18:00:40.216Z",
+  "case": {
+    "caseId": "CASE-2026-45087",
+    "title": "dick fraud",
+    "description": "nfjdnfjlnsg",
+    "status": "OPEN",
+    "createdAt": "2026-08-31T17:57:35.940Z"
+  },
+  "evidence": [],
+  "jobs": [
+    {
+      "_id": "6a95c147eea29015634ed34e",
+      "jobId": "JOB-21804",
+      "caseId": "6a95c08feea29015634ed34c",
+      "type": "REPORT",
+      "status": "RUNNING",
+      "progress": 0,
+      "createdBy": "6a95c07beea29015634ed34b",
+      "createdAt": "2026-08-31T18:00:39.816Z",
+      "updatedAt": "2026-08-31T18:00:39.997Z",
+      "__v": 0,
+      "stage": "assembling report",
+      "startedAt": "2026-08-31T18:00:39.996Z"
+    }
+  ]
+}

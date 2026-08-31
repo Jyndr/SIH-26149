@@ -1,0 +1,11 @@
+"""Auto-import all validator modules to trigger registration."""
+from core.validation.validators import jpeg    # noqa: F401
+from core.validation.validators import png     # noqa: F401
+from core.validation.validators import gif     # noqa: F401
+from core.validation.validators import bmp     # noqa: F401
+from core.validation.validators import pdf     # noqa: F401
+from core.validation.validators import zip_val # noqa: F401
+from core.validation.validators import riff    # noqa: F401
+from core.validation.validators import mp3     # noqa: F401
+from core.validation.validators import flv     # noqa: F401
+from core.validation.validators import mpg     # noqa: F401

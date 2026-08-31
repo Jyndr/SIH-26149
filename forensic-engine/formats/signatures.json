@@ -1,0 +1,231 @@
+{
+  "formats": [
+    {
+      "name": "jpeg", "description": "JPEG Image (JFIF/EXIF)", "category": "image",
+      "extensions": [".jpg", ".jpeg"], "mime_type": "image/jpeg",
+      "signatures": [{"pattern": "FFD8FF", "offset": 0, "description": "JPEG SOI + APP"}],
+      "footer": "FFD9", "min_size": 107, "max_size": 104857600,
+      "validator": "jpeg", "carving_strategy": "contiguous",
+      "confidence_factors": {"valid_header": 0.20, "valid_app_marker": 0.10, "valid_footer": 0.20, "valid_marker_structure": 0.20, "reasonable_size": 0.15, "valid_dimensions": 0.15}
+    },
+    {
+      "name": "png", "description": "Portable Network Graphics", "category": "image",
+      "extensions": [".png"], "mime_type": "image/png",
+      "signatures": [{"pattern": "89504E470D0A1A0A", "offset": 0, "description": "PNG signature"}],
+      "footer": "49454E44", "min_size": 67, "max_size": 524288000,
+      "validator": "png", "carving_strategy": "structured",
+      "confidence_factors": {"valid_header": 0.20, "valid_ihdr": 0.15, "valid_chunks": 0.20, "valid_iend": 0.15, "valid_crc": 0.15, "reasonable_size": 0.15}
+    },
+    {
+      "name": "gif", "description": "Graphics Interchange Format", "category": "image",
+      "extensions": [".gif"], "mime_type": "image/gif",
+      "signatures": [
+        {"pattern": "474946383761", "offset": 0, "description": "GIF87a"},
+        {"pattern": "474946383961", "offset": 0, "description": "GIF89a"}
+      ],
+      "footer": "003B", "min_size": 35, "max_size": 104857600,
+      "validator": "gif", "carving_strategy": "structured",
+      "confidence_factors": {"valid_header": 0.25, "valid_screen_descriptor": 0.15, "valid_image_data": 0.20, "valid_trailer": 0.20, "reasonable_size": 0.20}
+    },
+    {
+      "name": "bmp", "description": "Windows Bitmap", "category": "image",
+      "extensions": [".bmp"], "mime_type": "image/bmp",
+      "signatures": [{"pattern": "424D", "offset": 0, "description": "BMP header"}],
+      "footer": null, "min_size": 26, "max_size": 524288000,
+      "validator": "bmp", "carving_strategy": "structured",
+      "confidence_factors": {"valid_header": 0.15, "valid_file_size": 0.20, "valid_reserved": 0.15, "valid_dib_header": 0.20, "valid_dimensions": 0.15, "reasonable_size": 0.15}
+    },
+    {
+      "name": "tiff", "description": "Tagged Image File Format", "category": "image",
+      "extensions": [".tiff", ".tif"], "mime_type": "image/tiff",
+      "signatures": [
+        {"pattern": "49492A00", "offset": 0, "description": "TIFF LE"},
+        {"pattern": "4D4D002A", "offset": 0, "description": "TIFF BE"}
+      ],
+      "footer": null, "min_size": 8, "max_size": 2147483648,
+      "validator": "tiff", "carving_strategy": "structured",
+      "confidence_factors": {"valid_header": 0.30, "valid_ifd": 0.30, "valid_tags": 0.25, "reasonable_size": 0.15}
+    },
+    {
+      "name": "webp", "description": "WebP Image (RIFF)", "category": "image",
+      "extensions": [".webp"], "mime_type": "image/webp",
+      "signatures": [{"pattern": "52494646", "offset": 0, "description": "RIFF container"}],
+      "footer": null, "min_size": 12, "max_size": 104857600,
+      "validator": "riff", "carving_strategy": "structured", "riff_subtype": "WEBP",
+      "confidence_factors": {"valid_riff_header": 0.20, "valid_subtype": 0.25, "valid_size_field": 0.20, "valid_chunks": 0.20, "reasonable_size": 0.15}
+    },
+    {
+      "name": "pdf", "description": "Portable Document Format", "category": "document",
+      "extensions": [".pdf"], "mime_type": "application/pdf",
+      "signatures": [{"pattern": "255044462D", "offset": 0, "description": "PDF header"}],
+      "footer": "2525454F46", "min_size": 67, "max_size": 2147483648,
+      "validator": "pdf", "carving_strategy": "structured",
+      "confidence_factors": {"valid_header": 0.20, "valid_version": 0.10, "valid_objects": 0.20, "valid_xref": 0.15, "valid_eof": 0.20, "reasonable_size": 0.15}
+    },
+    {
+      "name": "rtf", "description": "Rich Text Format", "category": "document",
+      "extensions": [".rtf"], "mime_type": "application/rtf",
+      "signatures": [{"pattern": "7B5C727466", "offset": 0, "description": "RTF header"}],
+      "footer": "7D", "min_size": 7, "max_size": 524288000,
+      "validator": "rtf", "carving_strategy": "structured",
+      "confidence_factors": {"valid_header": 0.35, "balanced_braces": 0.30, "valid_control_words": 0.20, "reasonable_size": 0.15}
+    },
+    {
+      "name": "zip", "description": "ZIP Archive", "category": "archive",
+      "extensions": [".zip"], "mime_type": "application/zip",
+      "signatures": [{"pattern": "504B0304", "offset": 0, "description": "ZIP local file header"}],
+      "footer": null, "min_size": 22, "max_size": 4294967296,
+      "validator": "zip", "carving_strategy": "container",
+      "confidence_factors": {"valid_header": 0.15, "valid_local_header": 0.15, "valid_central_dir": 0.25, "valid_end_central_dir": 0.20, "valid_compression": 0.10, "reasonable_size": 0.15}
+    },
+    {
+      "name": "rar", "description": "RAR Archive", "category": "archive",
+      "extensions": [".rar"], "mime_type": "application/vnd.rar",
+      "signatures": [
+        {"pattern": "526172211A0700", "offset": 0, "description": "RAR v4"},
+        {"pattern": "526172211A070100", "offset": 0, "description": "RAR v5"}
+      ],
+      "footer": null, "min_size": 20, "max_size": 4294967296,
+      "validator": "rar", "carving_strategy": "structured",
+      "confidence_factors": {"valid_header": 0.35, "valid_version": 0.20, "valid_blocks": 0.30, "reasonable_size": 0.15}
+    },
+    {
+      "name": "7z", "description": "7-Zip Archive", "category": "archive",
+      "extensions": [".7z"], "mime_type": "application/x-7z-compressed",
+      "signatures": [{"pattern": "377ABCAF271C", "offset": 0, "description": "7-Zip signature"}],
+      "footer": null, "min_size": 32, "max_size": 17179869184,
+      "validator": "7z", "carving_strategy": "structured",
+      "confidence_factors": {"valid_header": 0.35, "valid_version": 0.20, "valid_start_header": 0.30, "reasonable_size": 0.15}
+    },
+    {
+      "name": "gzip", "description": "GZIP Compressed Data", "category": "archive",
+      "extensions": [".gz"], "mime_type": "application/gzip",
+      "signatures": [{"pattern": "1F8B08", "offset": 0, "description": "GZIP deflate"}],
+      "footer": null, "min_size": 20, "max_size": 4294967296,
+      "validator": "gzip", "carving_strategy": "structured",
+      "confidence_factors": {"valid_header": 0.25, "valid_method": 0.15, "valid_flags": 0.15, "valid_trailer": 0.25, "reasonable_size": 0.20}
+    },
+    {
+      "name": "mp3", "description": "MPEG Audio Layer III", "category": "audio",
+      "extensions": [".mp3"], "mime_type": "audio/mpeg",
+      "signatures": [
+        {"pattern": "494433", "offset": 0, "description": "ID3v2 tag"},
+        {"pattern": "FFFB", "offset": 0, "description": "MPEG sync L3 no CRC"},
+        {"pattern": "FFF3", "offset": 0, "description": "MPEG sync L3 CRC"}
+      ],
+      "footer": null, "min_size": 128, "max_size": 524288000,
+      "validator": "mp3", "carving_strategy": "structured",
+      "confidence_factors": {"valid_header": 0.20, "valid_id3": 0.15, "valid_frame_sync": 0.20, "valid_frame_header": 0.15, "consistent_bitrate": 0.15, "reasonable_size": 0.15}
+    },
+    {
+      "name": "wav", "description": "Waveform Audio (RIFF/WAVE)", "category": "audio",
+      "extensions": [".wav"], "mime_type": "audio/wav",
+      "signatures": [{"pattern": "52494646", "offset": 0, "description": "RIFF container"}],
+      "footer": null, "min_size": 44, "max_size": 4294967296,
+      "validator": "riff", "carving_strategy": "structured", "riff_subtype": "WAVE",
+      "confidence_factors": {"valid_riff": 0.20, "valid_subtype": 0.20, "valid_size": 0.15, "valid_fmt": 0.20, "valid_data": 0.10, "reasonable_size": 0.15}
+    },
+    {
+      "name": "flac", "description": "Free Lossless Audio Codec", "category": "audio",
+      "extensions": [".flac"], "mime_type": "audio/flac",
+      "signatures": [{"pattern": "664C6143", "offset": 0, "description": "FLAC marker"}],
+      "footer": null, "min_size": 42, "max_size": 2147483648,
+      "validator": "flac", "carving_strategy": "structured",
+      "confidence_factors": {"valid_header": 0.30, "valid_streaminfo": 0.30, "valid_metadata": 0.25, "reasonable_size": 0.15}
+    },
+    {
+      "name": "ogg", "description": "Ogg Container (Vorbis/Opus)", "category": "audio",
+      "extensions": [".ogg"], "mime_type": "audio/ogg",
+      "signatures": [{"pattern": "4F676753", "offset": 0, "description": "Ogg page sync"}],
+      "footer": null, "min_size": 28, "max_size": 2147483648,
+      "validator": "ogg", "carving_strategy": "structured",
+      "confidence_factors": {"valid_header": 0.30, "valid_page": 0.25, "valid_codec": 0.25, "reasonable_size": 0.20}
+    },
+    {
+      "name": "au", "description": "Sun/NeXT Audio", "category": "audio",
+      "extensions": [".au"], "mime_type": "audio/basic",
+      "signatures": [{"pattern": "2E736E64", "offset": 0, "description": "AU magic"}],
+      "footer": null, "min_size": 24, "max_size": 524288000,
+      "validator": "au", "carving_strategy": "structured",
+      "confidence_factors": {"valid_header": 0.30, "valid_offset": 0.20, "valid_encoding": 0.20, "valid_sample_rate": 0.15, "reasonable_size": 0.15}
+    },
+    {
+      "name": "mp4", "description": "MPEG-4 (ISO Base Media)", "category": "video",
+      "extensions": [".mp4", ".m4v"], "mime_type": "video/mp4",
+      "signatures": [{"pattern": "66747970", "offset": 4, "description": "ftyp box"}],
+      "footer": null, "min_size": 24, "max_size": 17179869184,
+      "validator": "mp4", "carving_strategy": "structured",
+      "confidence_factors": {"valid_ftyp": 0.25, "valid_brand": 0.15, "valid_boxes": 0.25, "valid_moov": 0.20, "reasonable_size": 0.15}
+    },
+    {
+      "name": "avi", "description": "Audio Video Interleave (RIFF)", "category": "video",
+      "extensions": [".avi"], "mime_type": "video/x-msvideo",
+      "signatures": [{"pattern": "52494646", "offset": 0, "description": "RIFF container"}],
+      "footer": null, "min_size": 220, "max_size": 4294967296,
+      "validator": "riff", "carving_strategy": "structured", "riff_subtype": "AVI ",
+      "confidence_factors": {"valid_riff": 0.20, "valid_subtype": 0.20, "valid_size": 0.15, "valid_hdrl": 0.20, "valid_movi": 0.10, "reasonable_size": 0.15}
+    },
+    {
+      "name": "mpg", "description": "MPEG-1/2 Program Stream", "category": "video",
+      "extensions": [".mpg", ".mpeg"], "mime_type": "video/mpeg",
+      "signatures": [
+        {"pattern": "000001BA", "offset": 0, "description": "MPEG pack header"},
+        {"pattern": "000001B3", "offset": 0, "description": "MPEG sequence header"}
+      ],
+      "footer": "000001B9", "min_size": 12, "max_size": 8589934592,
+      "validator": "mpg", "carving_strategy": "contiguous",
+      "confidence_factors": {"valid_header": 0.25, "valid_pack": 0.15, "valid_system": 0.15, "valid_pes": 0.15, "valid_footer": 0.15, "reasonable_size": 0.15}
+    },
+    {
+      "name": "flv", "description": "Flash Video", "category": "video",
+      "extensions": [".flv"], "mime_type": "video/x-flv",
+      "signatures": [{"pattern": "464C5601", "offset": 0, "description": "FLV header"}],
+      "footer": null, "min_size": 9, "max_size": 4294967296,
+      "validator": "flv", "carving_strategy": "structured",
+      "confidence_factors": {"valid_header": 0.25, "valid_version": 0.10, "valid_flags": 0.15, "valid_offset": 0.15, "valid_tags": 0.20, "reasonable_size": 0.15}
+    },
+    {
+      "name": "mkv", "description": "Matroska/WebM (EBML)", "category": "video",
+      "extensions": [".mkv", ".webm"], "mime_type": "video/x-matroska",
+      "signatures": [{"pattern": "1A45DFA3", "offset": 0, "description": "EBML header"}],
+      "footer": null, "min_size": 32, "max_size": 17179869184,
+      "validator": "mkv", "carving_strategy": "structured",
+      "confidence_factors": {"valid_ebml": 0.30, "valid_doctype": 0.25, "valid_segment": 0.25, "reasonable_size": 0.20}
+    },
+    {
+      "name": "mov", "description": "Apple QuickTime", "category": "video",
+      "extensions": [".mov"], "mime_type": "video/quicktime",
+      "signatures": [
+        {"pattern": "6D6F6F76", "offset": 4, "description": "moov atom"},
+        {"pattern": "66726565", "offset": 4, "description": "free atom"}
+      ],
+      "footer": null, "min_size": 24, "max_size": 17179869184,
+      "validator": "mp4", "carving_strategy": "structured",
+      "confidence_factors": {"valid_atom": 0.30, "valid_structure": 0.30, "valid_moov": 0.25, "reasonable_size": 0.15}
+    },
+    {
+      "name": "docx", "description": "MS Word (OOXML/ZIP)", "category": "document",
+      "extensions": [".docx"], "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "signatures": [{"pattern": "504B0304", "offset": 0, "description": "ZIP/OOXML"}],
+      "footer": null, "min_size": 1024, "max_size": 524288000,
+      "validator": "zip", "carving_strategy": "container",
+      "confidence_factors": {"valid_zip": 0.30, "has_content_types": 0.25, "has_word_dir": 0.25, "reasonable_size": 0.20}
+    },
+    {
+      "name": "xlsx", "description": "MS Excel (OOXML/ZIP)", "category": "document",
+      "extensions": [".xlsx"], "mime_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "signatures": [{"pattern": "504B0304", "offset": 0, "description": "ZIP/OOXML"}],
+      "footer": null, "min_size": 1024, "max_size": 524288000,
+      "validator": "zip", "carving_strategy": "container",
+      "confidence_factors": {"valid_zip": 0.30, "has_content_types": 0.25, "has_xl_dir": 0.25, "reasonable_size": 0.20}
+    },
+    {
+      "name": "pptx", "description": "MS PowerPoint (OOXML/ZIP)", "category": "document",
+      "extensions": [".pptx"], "mime_type": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "signatures": [{"pattern": "504B0304", "offset": 0, "description": "ZIP/OOXML"}],
+      "footer": null, "min_size": 1024, "max_size": 2147483648,
+      "validator": "zip", "carving_strategy": "container",
+      "confidence_factors": {"valid_zip": 0.30, "has_content_types": 0.25, "has_ppt_dir": 0.25, "reasonable_size": 0.20}
+    }
+  ]
+}
