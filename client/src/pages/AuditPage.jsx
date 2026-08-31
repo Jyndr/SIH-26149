@@ -1,8 +1,8 @@
-import React, { useEffect } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import AppShell from '../components/layout/AppShell';
 import Button from '../components/ui/Button';
-import Spinner from '../components/ui/Spinner';
+import Card from '../components/ui/Card';
 import AuditTimeline from '../features/audit/components/AuditTimeline';
 import AuditVerifyBadge from '../features/audit/components/AuditVerifyBadge';
 import useAudit from '../features/audit/hooks/useAudit';
@@ -15,12 +15,20 @@ const AuditPage = () => {
     fetchAudit();
   }, [caseId]);
 
+  const handleVerify = async () => {
+    try {
+      await verifyChain();
+    } catch (err) {
+      // Error is handled by useAudit hook
+    }
+  };
+
   return (
     <AppShell>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div>
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-4">
           <Link to={`/cases/${caseId}`} className="text-gray-600 hover:text-gray-900">
-            ← Back to case
+            ← Back to Case
           </Link>
           <h1 className="mt-2 text-2xl font-bold">Audit trail</h1>
         </div>

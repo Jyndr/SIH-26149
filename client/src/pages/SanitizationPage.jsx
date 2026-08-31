@@ -1,17 +1,40 @@
-import React, { useEffect } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import AppShell from '../components/layout/AppShell';
+import Button from '../components/ui/Button';
+import Card from '../components/ui/Card';
 import SanitizeForm from '../features/sanitization/components/SanitizeForm';
 import SanitizationJobList from '../features/sanitization/components/SanitizationJobList';
 import useSanitization from '../features/sanitization/hooks/useSanitization';
 
 const SanitizationPage = () => {
   const { caseId } = useParams();
-  const { sanitize, listJobs, jobs, loading, error } = useSanitization(caseId);
+  const [jobs, setJobs] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const { sanitize, listJobs, loading } = useSanitization(caseId);
 
   useEffect(() => {
-    listJobs();
+    loadJobs();
   }, [caseId]);
+
+  const loadJobs = async () => {
+    try {
+      const response = await listJobs();
+      setJobs(response.data || []);
+    } catch (err) {
+      console.error('Failed to load jobs:', err);
+    }
+  };
+
+  const handleSanitize = async (formData) => {
+    try {
+      await sanitize(formData);
+      setShowForm(false);
+      await loadJobs();
+    } catch (err) {
+      // Error is handled by useSanitization hook
+    }
+  };
 
   return (
     <AppShell>

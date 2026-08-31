@@ -3,7 +3,7 @@ import React from 'react';
 const Card = ({ children, className = '', hover = false, ...props }) => {
   return (
     <div
-      className={`bg-white rounded-2xl shadow-lg border border-gray-100 ${hover ? 'hover:shadow-2xl hover:-translate-y-1 transition-all duration-300' : 'transition-shadow duration-200'} ${className}`}
+      className={`bg-white rounded-xl shadow-lg border border-gray-100 ${hover ? 'hover:shadow-2xl hover:-translate-y-1 transition-all duration-300' : 'transition-shadow duration-200'} ${className}`}
       {...props}
     >
       {children}
@@ -13,7 +13,7 @@ const Card = ({ children, className = '', hover = false, ...props }) => {
 
 const CardHeader = ({ children, className = '' }) => {
   return (
-    <div className={`px-6 py-5 border-b border-gray-100 ${className}`}>
+    <div className={`px-6 py-4 border-b border-gray-100 bg-gray-50/50 ${className}`}>
       {children}
     </div>
   );

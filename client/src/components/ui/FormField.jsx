@@ -1,11 +1,12 @@
 import React from 'react';
 
-const FormField = ({ label, error, children, className = '', ...props }) => {
+const FormField = ({ label, error, children, required = false, className = '', ...props }) => {
   return (
     <div className={`mb-4 ${className}`} {...props}>
       {label && (
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
           {label}
+          {required && <span className="text-red-500 ml-1">*</span>}
         </label>
       )}
       {children}
@@ -19,16 +20,17 @@ const FormField = ({ label, error, children, className = '', ...props }) => {
 const Input = ({ className = '', ...props }) => {
   return (
     <input
-      className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent ${className}`}
+      className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 placeholder-gray-400 ${className}`}
       {...props}
     />
   );
 };
 
-const Textarea = ({ className = '', ...props }) => {
+const Textarea = ({ className = '', rows = 4, ...props }) => {
   return (
     <textarea
-      className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none ${className}`}
+      rows={rows}
+      className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 placeholder-gray-400 resize-none ${className}`}
       {...props}
     />
   );
@@ -37,7 +39,7 @@ const Textarea = ({ className = '', ...props }) => {
 const Select = ({ children, className = '', ...props }) => {
   return (
     <select
-      className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent ${className}`}
+      className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white ${className}`}
       {...props}
     >
       {children}
