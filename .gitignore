@@ -4,26 +4,31 @@ node_modules/
 
 # Environment variables
 .env
-**/.env
-!.env.example
 
-# Build outputs
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
 dist/
 build/
-*.log
+.venv/
+*.egg
 
-# Storage & Test Data
-backend/storage/
-forensic/*.dd*
-*.pyc
-__pycache__/
+# Forensic evidence images (large binary files)
+*.img
+*.E01
+*.e01
+*.E02
+*.e02
+*.raw
+
+# Scan/analysis output
+scan_results.json
+validated_results.json
+/test-runs/**/recoered files/
+!/test-runs/**/result.json
 
 # IDE
 .vscode/
 .idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
