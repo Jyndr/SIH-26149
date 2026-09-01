@@ -1,2 +1,30 @@
 node_modules/
 .env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+*.egg
+
+# Forensic evidence images (large binary files)
+*.img
+*.E01
+*.e01
+*.E02
+*.e02
+*.raw
+
+# Scan/analysis output
+scan_results.json
+validated_results.json
+/test-runs/**/recoered files/
+!/test-runs/**/result.json
+
+# IDE
+.vscode/
+.idea/
