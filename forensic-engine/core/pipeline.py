@@ -7,7 +7,6 @@ from core.classification.classifier import FileClassifier
 from core.detection.scanner import ChunkedScanner
 from core.detection.signatures import load_signatures
 from core.filesystem import FileSystemAnalyzer
-from core.filesystem.recovery import FileSystemRecoverer
 from core.image_reader import open_image
 from core.integrity.evidence import EvidenceManager
 from core.partition import PartitionAnalyzer
@@ -21,9 +20,6 @@ class PipelineConfig:
     max_carve_size: int = 100 * 1024 * 1024
     signatures_path: str | None = None
     scan_whole_image: bool = True
-    recover_filesystem: bool = True
-    recover_deleted: bool = True
-    max_filesystem_file_size: int | None = None
 
 
 class ForensicPipeline:
@@ -31,9 +27,6 @@ class ForensicPipeline:
         self.config = config or PipelineConfig()
         if self.config.chunk_size <= 0 or self.config.max_carve_size <= 0:
             raise ValueError("Chunk and carve sizes must be positive")
-        if (self.config.max_filesystem_file_size is not None
-                and self.config.max_filesystem_file_size <= 0):
-            raise ValueError("Filesystem recovery size must be positive")
         self.registry = load_signatures(self.config.signatures_path)
         self.evidence_manager = EvidenceManager()
 
@@ -50,69 +43,11 @@ class ForensicPipeline:
         artifacts = []
         warnings = []
         candidates_count = validated_count = 0
-        filesystem_detected = filesystem_recovered = filesystem_failed = 0
-        filesystem_skipped = carving_suppressed = 0
-        carved_artifacts = 0
         try:
             with open_image(source_path) as reader:
                 partitions = PartitionAnalyzer().analyze(reader)
-                filesystem_infos = [FileSystemAnalyzer().analyze(reader, partition)
-                                    for partition in partitions.partitions]
-                metadata_recovered_starts: set[int] = set()
-                if self.config.recover_filesystem:
-                    recovery_limit = (self.config.max_filesystem_file_size
-                                      or self.config.max_carve_size)
-                    recoverer = FileSystemRecoverer(
-                        self.registry, recovery_limit, self.config.chunk_size,
-                        self.config.recover_deleted)
-                    for partition, info in zip(partitions.partitions, filesystem_infos):
-                        warnings.extend(info.warnings)
-                        try:
-                            outcome = recoverer.recover(
-                                reader, partition, info.type, info.entries,
-                                output, case_id)
-                        except Exception as exc:
-                            # Metadata can be arbitrarily corrupt.  A recovery
-                            # failure on one volume must leave carving available.
-                            warning = (f"{info.type} filesystem recovery failed on "
-                                       f"partition {partition.index}: {exc}")
-                            warnings.append(warning)
-                            info.warnings.append(warning)
-                            failed_entries = sum(
-                                not entry.get("is_directory", False)
-                                for entry in info.entries)
-                            filesystem_detected += failed_entries
-                            filesystem_failed += failed_entries
-                            info.metadata["recovery"] = {
-                                "detected": failed_entries, "attempted": failed_entries,
-                                "recovered": 0, "failed": failed_entries, "skipped": 0,
-                            }
-                            continue
-                        artifacts.extend(outcome.artifacts)
-                        warnings.extend(outcome.warnings)
-                        filesystem_detected += outcome.detected
-                        filesystem_recovered += len(outcome.artifacts)
-                        filesystem_failed += outcome.failed
-                        filesystem_skipped += outcome.skipped
-                        info.metadata["recovery"] = {
-                            "detected": outcome.detected,
-                            "attempted": outcome.attempted,
-                            "recovered": len(outcome.artifacts),
-                            "failed": outcome.failed,
-                            "skipped": outcome.skipped,
-                        }
-                        for artifact in outcome.artifacts:
-                            if (artifact.is_complete
-                                    and (artifact.metadata.get("extents")
-                                         or artifact.metadata.get("data_offset") is not None
-                                         or artifact.metadata.get("resident_offset") is not None)
-                                    and artifact.metadata.get("allocated", False)
-                                    and not artifact.metadata.get("deleted", False)):
-                                metadata_recovered_starts.add(artifact.offset)
-                else:
-                    for info in filesystem_infos:
-                        warnings.extend(info.warnings)
-                filesystems = [info.to_dict() for info in filesystem_infos]
+                filesystems = [FileSystemAnalyzer().analyze(reader, p).to_dict()
+                               for p in partitions.partitions]
                 candidates = ChunkedScanner(self.registry, self.config.chunk_size).scan(
                     reader, progress_callback)
                 candidates_count = len(candidates)
@@ -123,11 +58,6 @@ class ForensicPipeline:
                 carver = Carver(self.config.max_carve_size, self.config.chunk_size)
                 classifier = FileClassifier(self.registry)
                 for candidate in candidates:
-                    # An intact active file already reconstructed from its
-                    # allocation map should not also appear as a carved copy.
-                    if candidate.offset in metadata_recovered_starts:
-                        carving_suppressed += 1
-                        continue
                     # Frame-based formats expose a signature at every frame.
                     # Avoid recovering candidates nested inside an artifact of
                     # the same format that was already recovered.
@@ -144,7 +74,6 @@ class ForensicPipeline:
                     carved = carver.carve(reader, result, output, case_id, self.registry)
                     if carved.success:
                         artifacts.append(classifier.classify(carved, result))
-                        carved_artifacts += 1
                         recovered_ranges.setdefault(candidate.format_name, []).append(
                             (carved.offset, carved.end_offset))
                     else:
@@ -156,10 +85,4 @@ class ForensicPipeline:
         return ForensicReport(evidence, partitions.to_dict(), filesystems, artifacts,
                               {"signature_candidates": candidates_count,
                                "validated_candidates": validated_count,
-                               "filesystem_files_detected": filesystem_detected,
-                               "filesystem_files_recovered": filesystem_recovered,
-                               "filesystem_files_failed": filesystem_failed,
-                               "filesystem_files_skipped": filesystem_skipped,
-                               "carving_candidates_suppressed": carving_suppressed,
-                               "carved_artifacts": carved_artifacts,
                                "recovered_artifacts": len(artifacts)}, warnings)

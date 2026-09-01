@@ -107,9 +107,7 @@ Optional body:
 
 {
   "chunkSize": 4194304,
-  "maxCarveSize": 104857600,
-  "maxFilesystemFileSize": 104857600,
-  "recoverDeleted": true
+  "maxCarveSize": 104857600
 }
 
 Express should:
@@ -165,11 +163,6 @@ spawn("forensic-engine", [
   reportPath
 ]);
 
-Filesystem recovery (including deleted entries) is enabled by default. If the
-request sets recoverDeleted to false, append "--allocated-only". If it supplies
-maxFilesystemFileSize, validate it as a positive integer and append
-"--max-filesystem-file-size" and its decimal value as separate spawn arguments.
-
 Passing arguments as an array prevents filenames or IDs from being interpreted as
 shell commands.
 
@@ -213,82 +206,30 @@ The JSON report has this shape:
     "runtime": "Python version"
   },
   "partition_analysis": {},
-  "filesystem_analysis": [
-    {
-      "type": "ntfs",
-      "partition_index": 1,
-      "start_offset": 1048576,
-      "label": "",
-      "metadata": {
-        "files_enumerated": 1,
-        "deleted_files_enumerated": 1,
-        "recovery": {
-          "detected": 1,
-          "attempted": 1,
-          "recovered": 1,
-          "failed": 0,
-          "skipped": 0
-        }
-      },
-      "files": [
-        {
-          "name": "photo.png",
-          "path": "/Users/Alice/Pictures/photo.png",
-          "size": 25000,
-          "is_deleted": true,
-          "allocated": false,
-          "extents": [
-            {
-              "image_offset": 1052672,
-              "logical_offset": 0,
-              "length": 25000,
-              "sparse": false
-            }
-          ]
-        }
-      ],
-      "warnings": []
-    }
-  ],
+  "filesystem_analysis": [],
   "artifacts": [
     {
       "artifact_id": "uuid",
       "format": "png",
       "category": "image",
       "mime_type": "image/png",
-      "offset": 1052672,
+      "offset": 4096,
       "size": 25000,
       "sha256": "sha256-value",
       "md5": "md5-value",
-      "confidence_score": 0.8,
-      "confidence_factors": {
-        "filesystem_metadata": 0.5,
-        "allocation_map": 0.3,
-        "active_directory_entry": 0.0
-      },
-      "recovery_method": "filesystem",
+      "confidence_score": 0.95,
+      "confidence_factors": {},
+      "recovery_method": "carving",
       "output_path": "/path/recovered/CASE-001/uuid.png",
       "is_complete": true,
       "is_fragmented": false,
-      "validation_details": "Recovered from deleted ntfs filesystem metadata; complete allocation data",
-      "metadata": {
-        "filesystem": "ntfs",
-        "original_name": "photo.png",
-        "original_path": "/Users/Alice/Pictures/photo.png",
-        "deleted": true,
-        "timestamps": {}
-      }
+      "validation_details": "validation information",
+      "metadata": {}
     }
   ],
   "statistics": {
     "signature_candidates": 5,
-    "validated_candidates": 1,
-    "filesystem_files_detected": 1,
-    "filesystem_files_recovered": 1,
-    "filesystem_files_failed": 0,
-    "filesystem_files_skipped": 0,
-    "carving_candidates_suppressed": 1,
-    "carved_artifacts": 1,
+    "validated_candidates": 2,
     "recovered_artifacts": 2
   },
   "warnings": []
@@ -300,13 +241,10 @@ The JSON report has this shape:
 
 After reading report.json, update the Recovery record:
 
-- totalFilesDetected = report.statistics.filesystem_files_detected plus validated
-  carving candidates (do not use raw signature hits as a file count)
+- totalFilesDetected = report.statistics.signature_candidates
 - filesRecovered = report.statistics.recovered_artifacts
-- filesCarved = report.statistics.carved_artifacts (equivalently, the number of
-  artifacts whose recovery_method is "carving")
-- filesFailed = report.statistics.filesystem_files_failed plus an appropriate
-  count derived from failed carving warnings, if used
+- filesCarved = the number of artifacts whose recovery_method is "carving"
+- filesFailed = an appropriate count derived from failed carving warnings, if used
 - status = "completed"
 - completedAt = the current time
 
@@ -317,8 +255,6 @@ Create one RecoveryResult document for every item in report.artifacts.
 Python-to-MongoDB field mapping:
 
 report.artifacts[].artifact_id       -> artifactId (recommended new field)
-report.artifacts[].metadata.original_name -> filename for filesystem recovery
-basename(report.artifacts[].output_path)  -> filename fallback for carving
 report.artifacts[].format            -> fileType
 report.artifacts[].size              -> size
 report.artifacts[].recovery_method   -> recoveryMethod
@@ -485,10 +421,8 @@ GET    /api/recovery-results/:resultId/download
 - SanitizationSchema.js describes database state, but the current Python engine
   implements read-only analysis and recovery, not sanitization.
 - The engine supports RAW images directly. Split EWF/E01 support requires pyewf.
-- FAT12/16/32, exFAT, NTFS, and ext2/3/4 filesystem metadata parsers are bundled.
-  They recover active and metadata-retained deleted files, including fragmented
-  or sparse layouts described by valid allocation metadata. Signature carving is
-  preserved as the fallback for files without usable metadata.
+- The engine recovers validated contiguous artifacts. Fragment reconstruction is
+  not currently represented as successful recovery.
 
 
 COMPLETE REQUEST/OUTPUT SUMMARY
@@ -499,10 +433,8 @@ COMPLETE REQUEST/OUTPUT SUMMARY
 3. Express stores the file and its MongoDB Evidence record.
 4. Frontend asks Express to start recovery using evidenceId.
 5. Express creates a Recovery job and starts the Python CLI with local paths.
-6. Python reads the evidence without modifying it, recovers files from filesystem
-   metadata, and then performs the existing signature-carving pass.
-7. Python writes both metadata-recovered and carved files plus report.json under
-   <output>/<case-id>/.
+6. Python reads the evidence without modifying it.
+7. Python writes recovered files and report.json under <output>/<case-id>/.
 8. Express parses report.json and saves RecoveryResult documents.
 9. Frontend polls Express for job status and requests result metadata.
 10. Frontend downloads a result through an Express endpoint.

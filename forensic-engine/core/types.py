@@ -6,7 +6,7 @@ Forensic Concepts
 SignatureCandidate — a raw scanner hit, NOT a confirmed file.
 ValidationResult  — structural check output with confidence factors.
 CarvingResult     — extraction outcome with boundary info.
-RecoveredArtifact — final filesystem/carving output with metadata + hashes.
+RecoveredArtifact — final recovered file with full metadata + hashes.
 """
 from __future__ import annotations
 import uuid
@@ -81,7 +81,7 @@ class CarvingResult:
 
 @dataclass(slots=True)
 class RecoveredArtifact:
-    """A hashed recovery output, including completeness and provenance."""
+    """A fully recovered, validated, hashed file."""
     artifact_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     format_name: str = ""
     category: FileCategory = FileCategory.OTHER

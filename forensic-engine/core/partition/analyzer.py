@@ -42,22 +42,11 @@ class PartitionAnalyzer:
             start_lba, sectors = struct.unpack("<II", entry[8:16])
             if type_id == 0 or sectors == 0:
                 continue
-            start_offset = start_lba * SECTOR_SIZE
-            partition_size = sectors * SECTOR_SIZE
-            # A filesystem boot sector can also end in 55 AA.  Do not mistake
-            # arbitrary bytes in its partition-table area for usable volumes.
-            if start_lba == 0 or start_offset >= reader.size:
-                continue
             protective |= type_id == 0xEE
-            entries.append(Partition(index + 1, start_offset,
-                                     partition_size, f"0x{type_id:02x}"))
+            entries.append(Partition(index + 1, start_lba * SECTOR_SIZE,
+                                     sectors * SECTOR_SIZE, f"0x{type_id:02x}"))
         if protective and reader.read_at(SECTOR_SIZE, 8) == b"EFI PART":
             return self._gpt(reader)
-        if not entries:
-            # Unpartitioned ("superfloppy") FAT, exFAT and NTFS volumes have a
-            # boot signature but no MBR entries and must be analyzed at byte 0.
-            return PartitionTable("none", [
-                Partition(1, 0, reader.size, "raw", "Whole image")])
         return PartitionTable("mbr", entries)
 
     def _gpt(self, reader: ImageReader) -> PartitionTable:
