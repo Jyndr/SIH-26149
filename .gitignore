@@ -28,3 +28,29 @@ validated_results.json
 # IDE
 .vscode/
 .idea/
+
+# Environment variables
+.env
+**/.env
+!.env.example
+
+# Build outputs
+dist/
+build/
+*.log
+
+# Storage & Test Data
+backend/storage/
+forensic/*.dd*
+*.pyc
+__pycache__/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
