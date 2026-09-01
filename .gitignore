@@ -22,6 +22,8 @@ build/
 # Scan/analysis output
 scan_results.json
 validated_results.json
+/test-runs/**/recoered files/
+!/test-runs/**/result.json
 
 # IDE
 .vscode/

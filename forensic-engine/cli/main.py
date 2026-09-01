@@ -20,13 +20,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="forensic-engine",
                                      description="Read-only forensic image analysis")
     sub = parser.add_subparsers(dest="command", required=True)
-    analyze = sub.add_parser("analyze", help="analyze and carve an image")
+    analyze = sub.add_parser(
+        "analyze", help="recover files from filesystem metadata and file carving")
     analyze.add_argument("evidence", type=Path)
     analyze.add_argument("--output", type=Path, required=True)
     analyze.add_argument("--case-id", required=True)
     analyze.add_argument("--report", type=Path)
     analyze.add_argument("--chunk-size", type=positive_int, default=4 * 1024 * 1024)
     analyze.add_argument("--max-carve-size", type=positive_int, default=100 * 1024 * 1024)
+    analyze.add_argument(
+        "--max-filesystem-file-size", type=positive_int,
+        help="maximum logical size of one metadata-recovered file (defaults to --max-carve-size)")
+    analyze.add_argument(
+        "--allocated-only", action="store_true",
+        help="do not attempt recovery of deleted filesystem entries")
+    analyze.add_argument(
+        "--no-filesystem-recovery", action="store_true",
+        help="identify filesystems but run signature carving only")
     analyze.add_argument("--signatures", type=Path)
     verify = sub.add_parser("verify", help="hash an evidence image")
     verify.add_argument("evidence", type=Path)
@@ -46,8 +56,14 @@ def main(argv: list[str] | None = None) -> int:
             record = EvidenceManager().register(args.evidence, "verification")
             print(json.dumps(record.to_dict(), indent=2))
             return 0
-        config = PipelineConfig(args.chunk_size, args.max_carve_size,
-                                str(args.signatures) if args.signatures else None)
+        config = PipelineConfig(
+            chunk_size=args.chunk_size,
+            max_carve_size=args.max_carve_size,
+            signatures_path=str(args.signatures) if args.signatures else None,
+            recover_filesystem=not args.no_filesystem_recovery,
+            recover_deleted=not args.allocated_only,
+            max_filesystem_file_size=args.max_filesystem_file_size,
+        )
         report = ForensicPipeline(config).run(args.evidence, args.output, args.case_id)
         report_path = args.report or args.output / args.case_id / "report.json"
         report.write_json(report_path)
