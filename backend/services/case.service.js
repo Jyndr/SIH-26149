@@ -20,7 +20,7 @@ const caseService = {
         createdBy: userId,
         investigators: [userId]
       });
-      
+
       // Audit logging
       await auditService.record({
         caseId: newCase._id,
@@ -29,7 +29,7 @@ const caseService = {
         target: `Case ${caseId}`,
         details: { title: data.title, description: data.description }
       });
-      
+
       logger.info(`Case created: ${caseId}`);
       return newCase;
     } catch (error) {
@@ -53,11 +53,12 @@ const caseService = {
     }
   },
 
-  getById: async (caseId, userId) => {
+  getById: async (caseId, userId, userRole) => {
     try {
       const caseDoc = await findCaseByParam(Case, caseId);
       if (!caseDoc) return null;
       const allowed =
+        userRole === 'ADMIN' ||
         caseDoc.createdBy?.toString() === String(userId) ||
         caseDoc.investigators?.some((inv) => inv.toString() === String(userId));
       return allowed ? caseDoc : null;
@@ -67,17 +68,18 @@ const caseService = {
     }
   },
 
-  update: async (caseId, data, userId) => {
+  update: async (caseId, data, userId, userRole) => {
     try {
       const existing = await findCaseByParam(Case, caseId);
       if (!existing) return null;
       const allowed =
+        userRole === 'ADMIN' ||
         existing.createdBy?.toString() === String(userId) ||
         existing.investigators?.some((inv) => inv.toString() === String(userId));
       if (!allowed) return null;
 
       const updatedCase = await Case.findByIdAndUpdate(existing._id, data, {
-        new: true,
+        returnDocument: 'after',
         runValidators: true
       });
 
@@ -90,7 +92,7 @@ const caseService = {
           details: data
         });
       }
-      
+
       logger.info(`Case updated: ${caseId}`);
       return updatedCase;
     } catch (error) {

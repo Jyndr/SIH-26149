@@ -16,7 +16,7 @@ import authRoutes from './routes/auth.routes.js';
 import evidenceRoutes from './routes/evidence.routes.js';
 import jobRoutes from './routes/job.routes.js';
 import analysisRoutes from './routes/analysis.routes.js';
-import recoveryRoutes from './routes/recovery.routes.js'; 
+import recoveryRoutes from './routes/recovery.routes.js';
 import sanitizationRoutes from './routes/sanitization.routes.js';
 import auditRoutes from './routes/audit.routes.js';
 import reportRoutes from './routes/report.routes.js';

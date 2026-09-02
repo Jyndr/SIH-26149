@@ -32,7 +32,7 @@ const jobService = {
         target: `Job ${jobId}`,
         details: { type: job.type, options: job.options ?? {} }
       });
-      
+
       logger.info(`Job created: ${jobId} (${data.type})`);
       return job;
     } catch (error) {
@@ -54,39 +54,39 @@ const jobService = {
   updateStatus: async (jobId, status, data = {}) => {
     try {
       const updateData = { status };
-      
+
       if (status === 'RUNNING' && !data.startedAt) {
         updateData.startedAt = new Date();
       }
-      
+
       if (status === 'COMPLETED' || status === 'FAILED' || status === 'CANCELLED') {
         updateData.completedAt = new Date();
       }
-      
+
       if (data.progress !== undefined) {
         updateData.progress = data.progress;
       }
-      
+
       if (data.stage) {
         updateData.stage = data.stage;
       }
-      
+
       if (data.result) {
         updateData.result = data.result;
       }
-      
+
       if (data.error) {
         updateData.error = data.error;
       }
-      
+
       if (data.pythonJobId) {
         updateData.pythonJobId = data.pythonJobId;
       }
-      
+
       const job = await Job.findOneAndUpdate(
         { jobId },
         updateData,
-        { new: true }
+        { returnDocument: 'after' }
       );
       if (!job) throw new Error('Job not found');
       await auditService.record({
@@ -99,10 +99,10 @@ const jobService = {
         result: status === 'FAILED' ? 'FAILURE' : 'SUCCESS',
         details: updateData
       });
-      
+
       // Emit event for SSE
       jobEvents.emit(`job:${jobId}`, job);
-      
+
       logger.info(`Job status updated: ${jobId} -> ${status}`);
       return job;
     } catch (error) {
@@ -116,13 +116,13 @@ const jobService = {
       const job = await Job.findOneAndUpdate(
         { jobId },
         { progress, stage },
-        { new: true }
+        { returnDocument: 'after' }
       );
       if (!job) throw new Error('Job not found');
-      
+
       // Emit event for SSE
       jobEvents.emit(`job:${jobId}`, job);
-      
+
       return job;
     } catch (error) {
       logger.error(`Error updating job progress: ${error.message}`);

@@ -41,8 +41,8 @@ const caseController = {
 
   getById: async (req, res, next) => {
     try {
-      const caseDoc = req.case || await caseService.getById(req.params.caseId, req.user.id);
-      
+      const caseDoc = req.case || await caseService.getById(req.params.caseId, req.user.id, req.user?.role);
+
       if (!caseDoc) {
         return res.status(404).json({
           success: false,
@@ -51,7 +51,7 @@ const caseController = {
           }
         });
       }
-      
+
       res.json({
         success: true,
         data: caseDoc
@@ -75,8 +75,8 @@ const caseController = {
       const { caseId } = caseIdSchema.parse(req.params);
       const validatedData = updateCaseSchema.parse(req.body);
       const userId = req.user.id;
-      const updatedCase = await caseService.update(caseId, validatedData, userId);
-      
+      const updatedCase = await caseService.update(caseId, validatedData, userId, req.user?.role);
+
       if (!updatedCase) {
         return res.status(404).json({
           success: false,
@@ -85,7 +85,7 @@ const caseController = {
           }
         });
       }
-      
+
       res.json({
         success: true,
         data: updatedCase

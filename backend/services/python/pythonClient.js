@@ -5,10 +5,24 @@ import { fileURLToPath } from 'url';
 import logger from '../../utils/logger.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const defaultEngineRoot = path.resolve(__dirname, '../../../forensic-engine');
+const defaultEngineRoot = path.resolve(__dirname, '../../../forensic');
 
-const resolveEngineRoot = () =>
-  path.resolve(process.cwd(), process.env.FORENSIC_ENGINE_PATH || defaultEngineRoot);
+const resolveEngineRoot = () => {
+  if (process.env.FORENSIC_ENGINE_PATH) {
+    const custom = path.resolve(process.cwd(), process.env.FORENSIC_ENGINE_PATH);
+    if (fs.existsSync(custom)) return custom;
+  }
+  const candidate1 = path.resolve(__dirname, '../../../forensic');
+  if (fs.existsSync(candidate1)) return candidate1;
+
+  const candidate2 = path.resolve(process.cwd(), '../forensic');
+  if (fs.existsSync(candidate2)) return candidate2;
+
+  const candidate3 = path.resolve(process.cwd(), 'forensic');
+  if (fs.existsSync(candidate3)) return candidate3;
+
+  return defaultEngineRoot;
+};
 
 const pythonClient = {
   async analyze(evidencePath, outputPath, caseId, options = {}) {
