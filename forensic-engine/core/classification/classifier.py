@@ -55,4 +55,9 @@ class FileClassifier:
             is_complete=carving_result.is_complete,
             is_fragmented=carving_result.is_fragmented,
             validation_details=validation_result.details,
+            classification="recovered_carved",
+            output_folder="files_recovered",
+            report_output_path=(f"files_recovered/"
+                                f"{Path(carving_result.output_path).name}"),
+            metadata={"deleted": None},
         )

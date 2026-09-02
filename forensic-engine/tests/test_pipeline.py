@@ -81,7 +81,8 @@ def test_pipeline_prefers_complete_filesystem_recovery_to_duplicate_carving(tmp_
     assert artifact.recovery_method == "filesystem"
     assert artifact.metadata["original_path"] == "/Pictures/original.png"
     assert Path(artifact.output_path).read_bytes() == png
-    assert report.statistics["filesystem_files_recovered"] == 1
+    assert report.statistics["existing_files_found"] == 1
+    assert report.statistics["recovered_deleted_files"] == 0
     assert report.statistics["carving_candidates_suppressed"] >= 1
 
 

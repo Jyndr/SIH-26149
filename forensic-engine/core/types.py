@@ -97,6 +97,9 @@ class RecoveredArtifact:
     is_complete: bool = True
     is_fragmented: bool = False
     validation_details: str = ""
+    classification: str = "recovered"
+    output_folder: str = "files_recovered"
+    report_output_path: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -108,7 +111,11 @@ class RecoveredArtifact:
             "confidence_score": round(self.confidence_score, 4),
             "confidence_factors": {k: round(v, 4) for k, v in self.confidence_factors.items()},
             "recovery_method": self.recovery_method,
-            "output_path": self.output_path,
+            "classification": self.classification,
+            "output_folder": self.output_folder,
+            "output_path": self.report_output_path or self.output_path,
+            "recovery_status": "recovered" if self.output_path else "failed",
+            "validation_status": "complete" if self.is_complete else "partial",
             "is_complete": self.is_complete, "is_fragmented": self.is_fragmented,
             "validation_details": self.validation_details,
             "metadata": self.metadata,

@@ -45,12 +45,17 @@ class ForensicPipeline:
         output = Path(output_dir).resolve()
         if output == source_path.parent:
             raise ValueError("Output directory must be separate from evidence")
+        result_dir = output / case_id
+        (result_dir / "files_found").mkdir(parents=True, exist_ok=True)
+        (result_dir / "files_recovered").mkdir(parents=True, exist_ok=True)
         evidence = self.evidence_manager.register(source_path, case_id)
         self.evidence_manager.begin(evidence)
         artifacts = []
         warnings = []
         candidates_count = validated_count = 0
-        filesystem_detected = filesystem_recovered = filesystem_failed = 0
+        filesystem_detected = filesystem_failed = 0
+        existing_detected = existing_found = existing_failed = 0
+        deleted_detected = deleted_recovered = deleted_failed = 0
         filesystem_skipped = carving_suppressed = 0
         carved_artifacts = 0
         try:
@@ -81,8 +86,17 @@ class ForensicPipeline:
                             failed_entries = sum(
                                 not entry.get("is_directory", False)
                                 for entry in info.entries)
+                            failed_deleted = sum(
+                                not entry.get("is_directory", False)
+                                and FileSystemRecoverer._is_deleted(entry)
+                                for entry in info.entries)
+                            failed_existing = failed_entries - failed_deleted
                             filesystem_detected += failed_entries
                             filesystem_failed += failed_entries
+                            existing_detected += failed_existing
+                            existing_failed += failed_existing
+                            deleted_detected += failed_deleted
+                            deleted_failed += failed_deleted
                             info.metadata["recovery"] = {
                                 "detected": failed_entries, "attempted": failed_entries,
                                 "recovered": 0, "failed": failed_entries, "skipped": 0,
@@ -91,13 +105,20 @@ class ForensicPipeline:
                         artifacts.extend(outcome.artifacts)
                         warnings.extend(outcome.warnings)
                         filesystem_detected += outcome.detected
-                        filesystem_recovered += len(outcome.artifacts)
                         filesystem_failed += outcome.failed
                         filesystem_skipped += outcome.skipped
+                        existing_detected += outcome.existing_detected
+                        existing_found += outcome.existing_found
+                        existing_failed += outcome.existing_failed
+                        deleted_detected += outcome.deleted_detected
+                        deleted_recovered += outcome.deleted_recovered
+                        deleted_failed += outcome.deleted_failed
                         info.metadata["recovery"] = {
                             "detected": outcome.detected,
                             "attempted": outcome.attempted,
-                            "recovered": len(outcome.artifacts),
+                            "existing_files_found": outcome.existing_found,
+                            "deleted_files_detected": outcome.deleted_detected,
+                            "recovered_deleted_files": outcome.deleted_recovered,
                             "failed": outcome.failed,
                             "skipped": outcome.skipped,
                         }
@@ -157,7 +178,12 @@ class ForensicPipeline:
                               {"signature_candidates": candidates_count,
                                "validated_candidates": validated_count,
                                "filesystem_files_detected": filesystem_detected,
-                               "filesystem_files_recovered": filesystem_recovered,
+                               "existing_files_detected": existing_detected,
+                               "existing_files_found": existing_found,
+                               "failed_existing_file_copies": existing_failed,
+                               "deleted_files_detected": deleted_detected,
+                               "recovered_deleted_files": deleted_recovered,
+                               "failed_deleted_recoveries": deleted_failed,
                                "filesystem_files_failed": filesystem_failed,
                                "filesystem_files_skipped": filesystem_skipped,
                                "carving_candidates_suppressed": carving_suppressed,

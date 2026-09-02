@@ -90,7 +90,7 @@ class ContiguousCarver(CarvingStrategy):
                                  offset=candidate.offset, error="No data to carve")
 
         # Create output path
-        case_dir = output_dir / case_id
+        case_dir = output_dir / case_id / "files_recovered"
         case_dir.mkdir(parents=True, exist_ok=True)
         out_path = case_dir / f"{artifact_id}{ext}"
 

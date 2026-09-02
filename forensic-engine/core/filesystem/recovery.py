@@ -35,6 +35,12 @@ class FileSystemRecoveryResult:
     attempted: int = 0
     failed: int = 0
     skipped: int = 0
+    existing_detected: int = 0
+    deleted_detected: int = 0
+    existing_found: int = 0
+    deleted_recovered: int = 0
+    existing_failed: int = 0
+    deleted_failed: int = 0
 
 
 class FileSystemRecoverer:
@@ -59,14 +65,29 @@ class FileSystemRecoverer:
         result = FileSystemRecoveryResult()
         output = Path(output_dir).resolve()
         case_dir = output / case_id
+        found_dir = case_dir / "files_found"
+        recovered_dir = case_dir / "files_recovered"
+        found_dir.mkdir(parents=True, exist_ok=True)
+        recovered_dir.mkdir(parents=True, exist_ok=True)
+        # Deleted entries have investigative priority while retaining every
+        # allocated entry.  Sorting is stable, so parser order is preserved
+        # within each category.
+        ordered_entries = sorted(
+            entries,
+            key=lambda item: 0 if isinstance(item, dict) and self._is_deleted(item) else 1,
+        )
 
-        for entry in entries:
+        for entry in ordered_entries:
             if not isinstance(entry, dict) or entry.get("is_directory", False):
                 continue
             result.detected += 1
             name = str(entry.get("name") or Path(str(entry.get("path", ""))).name
                        or "unnamed")
-            deleted = bool(entry.get("is_deleted", entry.get("deleted", False)))
+            deleted = self._is_deleted(entry)
+            if deleted:
+                result.deleted_detected += 1
+            else:
+                result.existing_detected += 1
             if deleted and not self.recover_deleted:
                 result.skipped += 1
                 continue
@@ -77,6 +98,7 @@ class FileSystemRecoverer:
                 logical_size = -1
             if logical_size < 0:
                 result.failed += 1
+                self._count_failure(result, deleted)
                 result.warnings.append(
                     f"{fs_type} metadata entry {name!r} has an invalid negative size")
                 continue
@@ -92,6 +114,7 @@ class FileSystemRecoverer:
             if logical_size and not isinstance(resident, (bytes, bytearray, memoryview)) \
                     and not extents:
                 result.failed += 1
+                self._count_failure(result, deleted)
                 result.warnings.append(
                     f"Cannot recover {fs_type} file {name!r}: metadata has no data extents")
                 continue
@@ -99,33 +122,35 @@ class FileSystemRecoverer:
             result.attempted += 1
             artifact_id = str(uuid.uuid4())
             definition, format_name, category, mime_type, extension = self._classify(name)
-            out_path = case_dir / f"{artifact_id}{extension}"
+            destination = recovered_dir if deleted else found_dir
+            out_path = self._available_output_path(destination, name, extension)
             try:
-                case_dir.mkdir(parents=True, exist_ok=True)
                 written, extraction_complete, extraction_warnings = self._extract(
                     reader, partition, entry, out_path, logical_size)
             except (OSError, ValueError, TypeError) as exc:
                 out_path.unlink(missing_ok=True)
                 result.failed += 1
+                self._count_failure(result, deleted)
                 result.warnings.append(f"Failed to recover {fs_type} file {name!r}: {exc}")
                 continue
 
             if logical_size > 0 and written == 0:
                 out_path.unlink(missing_ok=True)
                 result.failed += 1
+                self._count_failure(result, deleted)
                 result.warnings.append(
                     f"Failed to recover {fs_type} file {name!r}: no file data was readable")
                 continue
 
             entry_complete = bool(entry.get("is_complete", True))
             complete = entry_complete and extraction_complete and written == logical_size
-            deleted = bool(entry.get("is_deleted", entry.get("deleted", False)))
             allocated = bool(entry.get("allocated", not deleted))
             try:
                 hashes = hash_file(out_path, ["sha256", "md5"])
             except OSError as exc:
                 out_path.unlink(missing_ok=True)
                 result.failed += 1
+                self._count_failure(result, deleted)
                 result.warnings.append(
                     f"Failed to hash recovered {fs_type} file {name!r}: {exc}")
                 continue
@@ -135,8 +160,12 @@ class FileSystemRecoverer:
             metadata = self._artifact_metadata(
                 entry, fs_type, partition.index, logical_size, extraction_warnings)
             state = "deleted" if deleted else "active"
-            details = (f"Recovered from {state} {fs_type} filesystem metadata; "
+            action = "Recovered" if deleted else "Found and copied"
+            details = (f"{action} from {state} {fs_type} filesystem metadata; "
                        f"{'complete' if complete else 'partial'} allocation data")
+
+            classification = "recovered_deleted" if deleted else "existing"
+            output_folder = "files_recovered" if deleted else "files_found"
 
             result.artifacts.append(RecoveredArtifact(
                 artifact_id=artifact_id,
@@ -154,13 +183,48 @@ class FileSystemRecoverer:
                 is_complete=complete,
                 is_fragmented=fragmented,
                 validation_details=details,
+                classification=classification,
+                output_folder=output_folder,
+                report_output_path=f"{output_folder}/{out_path.name}",
                 metadata=metadata,
             ))
+            if deleted:
+                result.deleted_recovered += 1
+            else:
+                result.existing_found += 1
             if extraction_warnings:
                 result.warnings.extend(
                     f"{fs_type} file {name!r}: {warning}" for warning in extraction_warnings)
 
         return result
+
+    @staticmethod
+    def _is_deleted(entry: dict[str, Any]) -> bool:
+        return any(bool(entry.get(key, False))
+                   for key in ("is_deleted", "entry_deleted", "deleted"))
+
+    @staticmethod
+    def _count_failure(result: FileSystemRecoveryResult, deleted: bool) -> None:
+        if deleted:
+            result.deleted_failed += 1
+        else:
+            result.existing_failed += 1
+
+    @staticmethod
+    def _available_output_path(directory: Path, original_name: str,
+                               fallback_extension: str) -> Path:
+        # Filesystem names are untrusted. Preserve the metadata basename, but
+        # prevent traversal/control characters and resolve duplicate names.
+        name = original_name.replace("\\", "/").rsplit("/", 1)[-1]
+        name = "".join(char for char in name if ord(char) >= 32 and char not in "/\\")
+        if name in {"", ".", ".."}:
+            name = f"unnamed{fallback_extension}"
+        candidate = directory / name
+        sequence = 1
+        while candidate.exists():
+            candidate = directory / f"{Path(name).stem}_{sequence}{Path(name).suffix}"
+            sequence += 1
+        return candidate
 
     def _extract(self, reader: ImageReader, partition: Partition,
                  entry: dict[str, Any], target: Path,
@@ -376,8 +440,9 @@ class FileSystemRecoverer:
             "original_name": str(entry.get("name", "")),
             "original_path": str(entry.get("path", entry.get("name", ""))),
             "logical_size": logical_size,
-            "allocated": bool(entry.get("allocated", not entry.get("is_deleted", False))),
-            "deleted": bool(entry.get("is_deleted", entry.get("deleted", False))),
+            "allocated": bool(entry.get(
+                "allocated", not FileSystemRecoverer._is_deleted(entry))),
+            "deleted": FileSystemRecoverer._is_deleted(entry),
         }
         for key in (
             "id", "inode", "record_id", "record_number", "mft_record",

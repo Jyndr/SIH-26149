@@ -88,6 +88,31 @@ def test_deleted_filter_and_size_limit_are_reported(tmp_path):
                for warning in result.warnings)
 
 
+def test_existing_and_deleted_outputs_are_separate_and_reportable(tmp_path):
+    entries = [
+        {"name": "active.txt", "path": "/active.txt", "size": 3,
+         "allocated": True, "resident_data": b"old"},
+        {"name": "deleted.txt", "path": "/deleted.txt", "size": 3,
+         "entry_deleted": True, "resident_data": b"del"},
+    ]
+
+    result = _recover(tmp_path, b"", entries)
+
+    assert result.existing_detected == result.existing_found == 1
+    assert result.deleted_detected == result.deleted_recovered == 1
+    artifacts = {artifact.classification: artifact for artifact in result.artifacts}
+    existing = artifacts["existing"]
+    deleted = artifacts["recovered_deleted"]
+    assert Path(existing.output_path).parent.name == "files_found"
+    assert Path(existing.output_path).name == "active.txt"
+    assert existing.report_output_path == "files_found/active.txt"
+    assert Path(deleted.output_path).parent.name == "files_recovered"
+    assert Path(deleted.output_path).name == "deleted.txt"
+    assert deleted.report_output_path == "files_recovered/deleted.txt"
+    assert existing.metadata["deleted"] is False
+    assert deleted.metadata["deleted"] is True
+
+
 def test_out_of_partition_extent_produces_partial_artifact(tmp_path):
     entry = {
         "name": "damaged.bin", "size": 8, "allocated": True,
