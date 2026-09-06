@@ -2,13 +2,15 @@
   "type": "module",
   "jest": {
     "testEnvironment": "node",
-    "coveragePathIgnorePatterns": ["/node_modules/"],
-    "testMatch": ["**/__tests__/**/*.js"]
+    "coveragePathIgnorePatterns": [
+      "/node_modules/"
+    ],
+    "testMatch": [
+      "**/__tests__/**/*.js"
+    ]
   },
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node --watch src/server.js",
-    "mock-python": "node mock-python-server.js",
+    "dev": "node --watch-path=server.js --watch-path=controllers --watch-path=models --watch-path=routes --watch-path=services --watch-path=middleware --watch-path=utils --watch-path=config server.js",
     "seed:demo": "node scripts/seed-demo-user.js",
     "test": "jest",
     "test:watch": "jest --watch"

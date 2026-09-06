@@ -1,3 +1,4 @@
+import fs from 'fs';
 import path from 'path';
 import Evidence from '../models/Evidence.js';
 import Case from '../models/Case.js';
@@ -14,8 +15,16 @@ const generateRecoveredFileId = () => {
   return `REC-${random}`;
 };
 
-const evidenceAbsolutePath = (evidence) =>
-  path.join(storageService.getEvidenceStoragePath(), evidence.storedFilename);
+const evidenceAbsolutePath = (evidence) => {
+  if (evidence.storagePath && path.isAbsolute(evidence.storagePath) && fs.existsSync(evidence.storagePath)) {
+    return evidence.storagePath;
+  }
+  const inEvidenceDir = path.join(storageService.getEvidenceStoragePath(), evidence.storedFilename);
+  if (fs.existsSync(inEvidenceDir)) return inEvidenceDir;
+  const inStorageBase = path.join(storageService.getStorageBasePath(), evidence.storagePath || '');
+  if (fs.existsSync(inStorageBase)) return inStorageBase;
+  return inEvidenceDir;
+};
 
 const failJob = async (jobId, evidence, message) => {
   if (evidence) {
@@ -142,28 +151,42 @@ const recoveryService = {
       const artifacts = report.artifacts || [];
       const recoveredFiles = [];
 
+      // Clear previous recovered files for this evidence to ensure fresh real data
+      await RecoveredFile.deleteMany({ evidenceId: evidence._id });
+
       for (const artifact of artifacts) {
         const recoveredFileId = generateRecoveredFileId();
+        const originalName = artifact.metadata?.original_name || path.basename(artifact.output_path);
+        const originalPath = artifact.metadata?.original_path || artifact.output_path;
+        const confidence = typeof artifact.confidence_score === 'number'
+          ? Math.round(artifact.confidence_score * 100)
+          : 100;
+
         const recoveredDoc = await RecoveredFile.create({
           recoveredFileId,
           jobId: job._id,
           evidenceId: evidence._id,
           caseId: evidence.caseId,
-          originalPath: artifact.output_path,
+          filename: originalName,
+          originalPath: originalPath,
           recoveredPath: artifact.output_path,
           size: artifact.size,
           hash: artifact.sha256,
-          fileType: artifact.format,
+          fileType: artifact.format || 'dat',
+          confidence: confidence,
           recoveryStatus: artifact.is_complete ? 'SUCCESS' : 'PARTIAL',
           metadata: {
             artifactId: artifact.artifact_id,
             category: artifact.category,
             mimeType: artifact.mime_type,
             offset: artifact.offset,
-            recoveryMethod: artifact.recovery_method,
-            confidence: (artifact.confidence_score || 0) * 100,
+            recoveryMethod: artifact.recovery_method || 'filesystem',
+            confidence: confidence,
             isFragmented: artifact.is_fragmented,
-            validationDetails: artifact.validation_details
+            validationDetails: artifact.validation_details,
+            originalName: originalName,
+            originalPath: originalPath,
+            rawMetadata: artifact.metadata || {}
           }
         });
         recoveredFiles.push(recoveredDoc);

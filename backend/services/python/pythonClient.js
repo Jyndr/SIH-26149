@@ -7,8 +7,15 @@ import logger from '../../utils/logger.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const defaultEngineRoot = path.resolve(__dirname, '../../../forensic-engine');
 
-const resolveEngineRoot = () =>
-  path.resolve(process.cwd(), process.env.FORENSIC_ENGINE_PATH || defaultEngineRoot);
+const resolveEngineRoot = () => {
+  if (process.env.FORENSIC_ENGINE_PATH) {
+    const fromCwd = path.resolve(process.cwd(), process.env.FORENSIC_ENGINE_PATH);
+    if (fs.existsSync(fromCwd)) return fromCwd;
+    const fromRoot = path.resolve(defaultEngineRoot, '..', process.env.FORENSIC_ENGINE_PATH);
+    if (fs.existsSync(fromRoot)) return fromRoot;
+  }
+  return defaultEngineRoot;
+};
 
 const pythonClient = {
   async analyze(evidencePath, outputPath, caseId, options = {}) {

@@ -9,5 +9,6 @@ router.use(auth); // All recovery routes require authentication
 router.post('/evidence/:evidenceId/recover', recoveryController.recoverFiles);
 router.get('/evidence/:evidenceId/recovered-files', recoveryController.getRecoveredFiles);
 router.get('/evidence/:evidenceId/recovery-results', recoveryController.getRecoveredFiles);
+router.get('/recovered-files/:recoveredFileId/download', recoveryController.downloadFile);
 
 export default router;

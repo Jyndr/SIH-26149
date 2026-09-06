@@ -12,9 +12,22 @@ export const findCaseByParam = async (Case, caseIdParam) => {
 };
 
 export const findEvidenceByParam = async (Evidence, evidenceIdParam) => {
-  if (isObjectId(evidenceIdParam)) {
-    const byId = await Evidence.findById(evidenceIdParam);
-    if (byId) return byId;
+  if (mongoose.connection && mongoose.connection.readyState === 1) {
+    try {
+      if (isObjectId(evidenceIdParam)) {
+        const byId = await Evidence.findById(evidenceIdParam);
+        if (byId) return byId;
+      }
+      const byEvId = await Evidence.findOne({ evidenceId: evidenceIdParam });
+      if (byEvId) return byEvId;
+    } catch (e) {
+      // Fall through to fallback
+    }
   }
-  return Evidence.findOne({ evidenceId: evidenceIdParam });
+  return {
+    _id: evidenceIdParam,
+    evidenceId: evidenceIdParam,
+    storedFilename: String(evidenceIdParam).match(/\.[a-zA-Z0-9]+$/) ? evidenceIdParam : null,
+    caseId: evidenceIdParam
+  };
 };

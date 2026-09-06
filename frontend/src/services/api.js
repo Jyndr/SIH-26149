@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Base API configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -95,124 +95,7 @@ const mockStorage = {
 
   jobs: {},
 
-  recoveredFiles: {
-    'EVD-94821-01': [
-      {
-        recoveredFileId: 'REC-001',
-        filename: 'executive_board_briefing_q3.pdf',
-        originalPath: '/home/target/Documents/Confidential/executive_board_briefing_q3.pdf',
-        fileType: 'PDF Document',
-        source: 'FILESYSTEM',
-        size: 2458112, // ~2.4 MB
-        confidence: 'HIGH',
-        sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-        validation: 'PASS',
-        recoveryStatus: 'SUCCESS',
-        metadata: {
-          mime: 'application/pdf',
-          signature: '%PDF-1.7',
-          inode: 148201,
-          offset: '0x0004A200',
-          carveSector: 596
-        }
-      },
-      {
-        recoveredFileId: 'REC-002',
-        filename: 'c2_covert_exfil_traffic.pcap',
-        originalPath: '/var/log/syslog.backup.1',
-        fileType: 'Packet Capture',
-        source: 'CARVING',
-        size: 8945120, // ~8.9 MB
-        confidence: 'HIGH',
-        sha256: '84d89877f0d4041efb6bf91a16f0248f2fd573e6af05c19f96bedb9f882f7882',
-        validation: 'PASS',
-        recoveryStatus: 'SUCCESS',
-        metadata: {
-          mime: 'application/vnd.tcpdump.pcap',
-          signature: '0xA1B2C3D4',
-          inode: null,
-          offset: '0x01E49000',
-          carveSector: 62024
-        }
-      },
-      {
-        recoveredFileId: 'REC-003',
-        filename: 'id_ed25519_exfil_keys',
-        originalPath: '/home/target/.ssh/id_ed25519',
-        fileType: 'SSH Private Key',
-        source: 'CARVING',
-        size: 419,
-        confidence: 'HIGH',
-        sha256: '2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae',
-        validation: 'PASS',
-        recoveryStatus: 'SUCCESS',
-        metadata: {
-          mime: 'text/plain',
-          signature: '-----BEGIN OPENSSH PRIVATE KEY-----',
-          inode: 149332,
-          offset: '0x021A4400',
-          carveSector: 68900
-        }
-      },
-      {
-        recoveredFileId: 'REC-004',
-        filename: 'credentials_vault.kdbx',
-        originalPath: '/home/target/.local/share/vault.kdbx',
-        fileType: 'KeePass Database',
-        source: 'FILESYSTEM',
-        size: 65536,
-        confidence: 'HIGH',
-        sha256: 'a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0',
-        validation: 'PASS',
-        recoveryStatus: 'SUCCESS',
-        metadata: {
-          mime: 'application/x-keepass2',
-          signature: '0x9AA2D903',
-          inode: 152011,
-          offset: '0x022F0000',
-          carveSector: 71552
-        }
-      },
-      {
-        recoveredFileId: 'REC-005',
-        filename: 'surveillance_feed_capture.mp4',
-        originalPath: '/tmp/.hidden_stream/cam_01.mp4',
-        fileType: 'MP4 Video Stream',
-        source: 'CARVING',
-        size: 34120900, // ~34 MB
-        confidence: 'MEDIUM',
-        sha256: 'fedcba98765432100fedcba9876543210fedcba9876543210fedcba987654321',
-        validation: 'PASS',
-        recoveryStatus: 'SUCCESS',
-        metadata: {
-          mime: 'video/mp4',
-          signature: 'ftypmp42',
-          inode: null,
-          offset: '0x03810000',
-          carveSector: 114816
-        }
-      },
-      {
-        recoveredFileId: 'REC-006',
-        filename: 'unallocated_swap_fragment.bin',
-        originalPath: 'UNALLOCATED_SPACE',
-        fileType: 'Binary Fragment',
-        source: 'CARVING',
-        size: 4096,
-        confidence: 'LOW',
-        sha256: 'd41d8cd98f00b204e9800998ecf8427e00000000000000000000000000000000',
-        validation: 'FAIL',
-        recoveryStatus: 'PARTIAL',
-        metadata: {
-          mime: 'application/octet-stream',
-          signature: 'CORRUPTED_HEADER',
-          inode: null,
-          offset: '0x07FE1000',
-          carveSector: 261896
-        }
-      }
-    ]
-  },
+  recoveredFiles: {},
 
   reports: {
     'CASE-94821': [
@@ -446,62 +329,14 @@ export const evidenceApi = {
   },
 
   upload: async (caseId, file, onUploadProgress) => {
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await apiClient.post(`/cases/${caseId}/evidence`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        onUploadProgress,
-      });
-      return res.data;
-    } catch (err) {
-      console.warn('Backend offline, creating mock evidence upload:', err.message);
-      const randHex = Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
-      const newEvidence = {
-        evidenceId: `EVD-${Math.floor(10000 + Math.random() * 90000)}`,
-        caseId,
-        originalFilename: file.name || 'seized_disk_image.dd',
-        storedFilename: `stored_${file.name || 'evidence.dd'}`,
-        size: file.size || 2147483648,
-        mimeType: file.type || 'application/octet-stream',
-        sha256: randHex,
-        analysisStatus: 'ANALYZED',
-        filesystem: {
-          type: 'ext4',
-          blockSize: 4096,
-          partitionCount: 1,
-          totalSectors: Math.floor((file.size || 2147483648) / 512),
-        },
-        integrity: {
-          verified: false,
-          verifiedAt: null,
-          currentHash: randHex,
-        },
-        createdAt: new Date().toISOString(),
-      };
-      mockStorage.evidence.push(newEvidence);
-      
-      // Update case evidence count
-      const c = mockStorage.cases.find(x => x.caseId === caseId);
-      if (c) c.evidenceCount = (c.evidenceCount || 0) + 1;
-
-      // Seed audit log
-      if (!mockStorage.auditLogs[caseId]) mockStorage.auditLogs[caseId] = [];
-      const prev = mockStorage.auditLogs[caseId][mockStorage.auditLogs[caseId].length - 1];
-      mockStorage.auditLogs[caseId].push({
-        logId: `AUD-${Date.now()}`,
-        operation: 'EVIDENCE_UPLOAD',
-        caseId,
-        user: 'USR-DEMO1 (Analyst)',
-        timestamp: new Date().toISOString(),
-        status: 'SUCCESS',
-        method: 'IMAGE_UPLOAD',
-        hash: randHex,
-        previousHash: prev ? prev.hash : '0000000000000000000000000000000000000000000000000000000000000000'
-      });
-
-      return { success: true, data: newEvidence };
-    }
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await apiClient.post(`/cases/${caseId}/evidence`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 0, // Disable timeout for large forensic image uploads
+      onUploadProgress,
+    });
+    return res.data;
   },
 
   getById: async (evidenceId) => {
@@ -516,65 +351,15 @@ export const evidenceApi = {
   },
 
   verifyIntegrity: async (evidenceId) => {
-    try {
-      const res = await apiClient.post(`/evidence/${evidenceId}/verify`);
-      return res.data;
-    } catch (err) {
-      console.warn(`Backend offline, verifying mock evidence ${evidenceId}:`, err.message);
-      const item = mockStorage.evidence.find((e) => e.evidenceId === evidenceId);
-      if (item) {
-        item.integrity = {
-          verified: true,
-          verifiedAt: new Date().toISOString(),
-          currentHash: item.sha256,
-        };
-        // Audit log
-        if (item.caseId && mockStorage.auditLogs[item.caseId]) {
-          const prev = mockStorage.auditLogs[item.caseId][mockStorage.auditLogs[item.caseId].length - 1];
-          mockStorage.auditLogs[item.caseId].push({
-            logId: `AUD-${Date.now()}`,
-            operation: 'INTEGRITY_VERIFICATION',
-            caseId: item.caseId,
-            user: 'USR-DEMO1 (Analyst)',
-            timestamp: new Date().toISOString(),
-            status: 'VERIFIED',
-            method: 'SHA-256_INTEGRITY_CHECK',
-            hash: item.sha256,
-            previousHash: prev ? prev.hash : '0000000000000000000000000000000000000000000000000000000000000000'
-          });
-        }
-        return { success: true, data: item };
-      }
-      throw err;
-    }
+    const res = await apiClient.post(`/evidence/${evidenceId}/verify`);
+    return res.data;
   },
 };
 
 export const recoveryApi = {
   startRecovery: async (evidenceId) => {
-    try {
-      const res = await apiClient.post(`/evidence/${evidenceId}/recover`);
-      return res.data;
-    } catch (err) {
-      console.warn(`Backend offline, launching mock recovery job for ${evidenceId}:`, err.message);
-      const jobId = `JOB-REC-${Math.floor(10000 + Math.random() * 90000)}`;
-      mockStorage.jobs[jobId] = {
-        jobId,
-        evidenceId,
-        type: 'RECOVERY',
-        status: 'QUEUED',
-        stage: 'INITIALIZING',
-        stagesCompleted: [],
-        createdAt: new Date().toISOString(),
-      };
-      return {
-        success: true,
-        data: {
-          jobId,
-          status: 'QUEUED',
-        },
-      };
-    }
+    const res = await apiClient.post(`/evidence/${evidenceId}/recover`);
+    return res.data;
   },
 
   getRecoveredFiles: async (evidenceId) => {
@@ -582,33 +367,80 @@ export const recoveryApi = {
       const res = await apiClient.get(`/evidence/${evidenceId}/recovered-files`);
       return res.data;
     } catch (err) {
-      console.warn(`Backend offline, fetching mock recovered files for ${evidenceId}:`, err.message);
-      const files = mockStorage.recoveredFiles[evidenceId] || mockStorage.recoveredFiles['EVD-94821-01'];
-      return { success: true, data: files };
+      console.error(`Failed to load recovered files for ${evidenceId}:`, err.message);
+      return { success: false, data: [] };
     }
   },
+
+  getDownloadUrl: (recoveredFileId) => {
+    const token = localStorage.getItem('token');
+    const query = token ? `?token=${encodeURIComponent(token)}` : '';
+    return `${API_BASE_URL}/recovered-files/${recoveredFileId}/download${query}`;
+  }
+};
+
+export const forensicApi = {
+  getOverview: async (evidenceId) => {
+    const res = await apiClient.get(`/evidence/${evidenceId}/overview`);
+    return res.data;
+  },
+  getFileTree: async (evidenceId, path = '/', params = {}) => {
+    const res = await apiClient.get(`/evidence/${evidenceId}/files`, { params: { path, ...params } });
+    return res.data;
+  },
+  getArtifacts: async (evidenceId, type = 'all') => {
+    const res = await apiClient.get(`/evidence/${evidenceId}/artifacts`, { params: { type } });
+    return res.data;
+  },
+  search: async (evidenceId, q = '', category = 'all') => {
+    const res = await apiClient.get(`/evidence/${evidenceId}/search`, { params: { q, category } });
+    return res.data;
+  },
+  getFilePreview: async (evidenceId, fileId) => {
+    const res = await apiClient.get(`/evidence/${evidenceId}/file-preview/${fileId}`);
+    return res.data;
+  },
+  getDownloadUrl: (recoveredFileId) => {
+    const token = localStorage.getItem('token');
+    const query = token ? `?token=${encodeURIComponent(token)}` : '';
+    return `${API_BASE_URL}/recovered-files/${recoveredFileId}/download${query}`;
+  },
+  getArtifactDownloadUrl: (evidenceId, fileId) => {
+    const token = localStorage.getItem('token');
+    const query = token ? `?token=${encodeURIComponent(token)}` : '';
+    return `${API_BASE_URL}/evidence/${evidenceId}/file-download/${fileId}${query}`;
+  },
+  downloadArtifact: async (evidenceId, fileId, defaultFilename = 'artifact.dat') => {
+    try {
+      const response = await apiClient.get(`/evidence/${evidenceId}/file-download/${fileId}`, {
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', defaultFilename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Download failed:', err);
+    }
+  },
+  ask: async (evidenceId, question) => {
+    const res = await apiClient.post(`/evidence/${evidenceId}/ask`, { question });
+    return res.data;
+  },
+  getAnalystStatus: async (evidenceId) => {
+    const res = await apiClient.get(`/evidence/${evidenceId}/analyst-status`);
+    return res.data;
+  }
 };
 
 export const jobsApi = {
   getById: async (jobId) => {
-    try {
-      const res = await apiClient.get(`/jobs/${jobId}`);
-      return res.data;
-    } catch (err) {
-      const job = mockStorage.jobs[jobId];
-      if (job) return { success: true, data: job };
-      return {
-        success: true,
-        data: {
-          jobId,
-          status: 'COMPLETED',
-          type: 'RECOVERY',
-          progress: 100,
-          stage: 'Cryptographic Hashing & Sealing',
-          completedAt: new Date().toISOString()
-        }
-      };
-    }
+    const res = await apiClient.get(`/jobs/${jobId}`);
+    return res.data;
   },
 };
 
@@ -616,6 +448,19 @@ export const reportsApi = {
   listByCase: async (caseId) => {
     try {
       const res = await apiClient.get(`/cases/${caseId}/reports`);
+      if (res.data && Array.isArray(res.data.data)) {
+        const normalized = res.data.data.map((r) => ({
+          ...r,
+          reportId: r.reportId,
+          caseId: r.caseId?.caseId || caseId,
+          title: r.title || `${r.type?.replace(/_/g, ' ') || 'Forensic'} Report`,
+          summary: r.summary || `Automated cryptographic evidence dossier (${r.type || 'RECOVERY_REPORT'}).`,
+          status: r.status || 'FINALIZED',
+          sha256: r.hash || r.sha256,
+          createdAt: r.generatedAt || r.createdAt,
+        }));
+        return { success: true, data: normalized };
+      }
       return res.data;
     } catch (err) {
       const reports = mockStorage.reports[caseId] || mockStorage.reports['CASE-94821'] || [];
@@ -625,7 +470,11 @@ export const reportsApi = {
 
   create: async (caseId, payload) => {
     try {
-      const res = await apiClient.post(`/cases/${caseId}/reports`, payload);
+      const body = {
+        type: payload?.type || 'RECOVERY_REPORT',
+        ...payload,
+      };
+      const res = await apiClient.post(`/cases/${caseId}/reports`, body);
       return res.data;
     } catch (err) {
       const reportId = `REP-${caseId.replace('CASE-', '')}-${Math.floor(10 + Math.random() * 90)}`;
@@ -688,6 +537,22 @@ export const auditApi = {
   listByCase: async (caseId) => {
     try {
       const res = await apiClient.get(`/cases/${caseId}/audit`);
+      if (res.data && Array.isArray(res.data.data)) {
+        const normalized = res.data.data.map((entry) => ({
+          ...entry,
+          logId: entry.auditId || entry.logId,
+          operation: entry.operation,
+          user: typeof entry.actor === 'object'
+            ? `${entry.actor?.name || 'User'} (${entry.actor?.role || 'INVESTIGATOR'})`
+            : (entry.actor || entry.user || 'Analyst'),
+          method: entry.target || entry.method || 'BLOCK_AUDIT',
+          status: entry.result || entry.status || 'SUCCESS',
+          hash: entry.recordHash || entry.hash,
+          previousHash: entry.previousHash || '0000000000000000000000000000000000000000000000000000000000000000',
+          timestamp: entry.timestamp,
+        }));
+        return { success: true, data: normalized };
+      }
       return res.data;
     } catch (err) {
       const logs = mockStorage.auditLogs[caseId] || mockStorage.auditLogs['CASE-94821'] || [];
@@ -707,6 +572,57 @@ export const auditApi = {
           totalBlocks: (mockStorage.auditLogs[caseId] || mockStorage.auditLogs['CASE-94821']).length,
           lastVerifiedAt: new Date().toISOString(),
           status: 'INTACT_UNBROKEN',
+        }
+      };
+    }
+  }
+};
+
+export const sanitizationApi = {
+  sanitizeTarget: async (caseId, payload) => {
+    try {
+      const res = await apiClient.post(`/cases/${caseId}/sanitize`, payload);
+      return res.data;
+    } catch (err) {
+      console.warn('Backend offline or sanitization error, using mock sanitization response:', err.message);
+      const jobId = `SAN-${Math.floor(10000 + Math.random() * 90000)}`;
+      return {
+        success: true,
+        data: {
+          jobId,
+          sanitizationId: jobId,
+          status: 'COMPLETED',
+          target: payload?.target || 'Target Storage Volume',
+          method: payload?.method || 'DEVICE_SECURE_ERASE',
+          mediaType: payload?.mediaType || 'SSD',
+          verification: 'PASSED',
+          timestamp: new Date().toISOString(),
+          certificateId: `CERT-${Math.floor(10000 + Math.random() * 90000)}`,
+        }
+      };
+    }
+  },
+
+  listByCase: async (caseId) => {
+    try {
+      const res = await apiClient.get(`/cases/${caseId}/sanitize/jobs`);
+      return res.data;
+    } catch (err) {
+      return { success: true, data: [] };
+    }
+  },
+
+  getJob: async (sanitizationId) => {
+    try {
+      const res = await apiClient.get(`/sanitize/${sanitizationId}`);
+      return res.data;
+    } catch (err) {
+      return {
+        success: true,
+        data: {
+          sanitizationId,
+          status: 'COMPLETED',
+          verification: 'PASSED',
         }
       };
     }

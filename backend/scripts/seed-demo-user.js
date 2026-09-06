@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import User from '../src/models/User.js';
+import User from '../models/User.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

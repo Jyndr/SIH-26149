@@ -5,6 +5,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { CasesPage } from './pages/CasesPage';
 import { CaseDetailsPage } from './pages/CaseDetailsPage';
 import { RecoveryWorkflowPage } from './pages/RecoveryWorkflowPage';
+import { SanitizationPage } from './pages/SanitizationPage';
 import { AuditPage } from './pages/AuditPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { AppLayout } from './components/layout/AppLayout';
@@ -22,6 +23,11 @@ export const App = () => {
         <Route path="/cases" element={<CasesPage />} />
         <Route path="/cases/:caseId" element={<CaseDetailsPage />} />
         <Route path="/cases/:caseId/recovery" element={<RecoveryWorkflowPage />} />
+        <Route path="/cases/:caseId/forensic-analyst" element={<RecoveryWorkflowPage />} />
+        <Route path="/recovery" element={<RecoveryWorkflowPage />} />
+        <Route path="/forensic-analyst" element={<RecoveryWorkflowPage />} />
+        <Route path="/cases/:caseId/sanitization" element={<SanitizationPage />} />
+        <Route path="/sanitization" element={<SanitizationPage />} />
         <Route path="/audit" element={<AuditPage />} />
         <Route path="/reports" element={<ReportsPage />} />
       </Route>
@@ -33,3 +39,4 @@ export const App = () => {
 };
 
 export default App;
+

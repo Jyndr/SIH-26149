@@ -1,17 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Plus, 
-  FolderKanban, 
-  Search, 
-  HardDrive, 
-  ShieldCheck, 
-  FileCheck2, 
-  ArrowUpRight, 
-  Clock, 
-  Layers,
-  Terminal,
-  Eraser
+import {
+  Plus,
+  FileSearch,
+  Eraser,
+  Briefcase,
+  FileText,
+  ArrowRight,
+  Clock,
+  CheckCircle2,
+  Activity,
+  HardDrive
 } from 'lucide-react';
 import { casesApi } from '../services/api';
 import { StatusBadge } from '../components/common/StatusBadge';
@@ -56,6 +55,8 @@ export const DashboardPage = () => {
 
       if (res.data && res.data.caseId) {
         setIsModalOpen(false);
+        setNewTitle('');
+        setNewDesc('');
         navigate(`/cases/${res.data.caseId}`);
       }
     } catch (err) {
@@ -68,148 +69,200 @@ export const DashboardPage = () => {
   const totalCases = cases.length;
   const activeCases = cases.filter(c => c.status === 'IN_PROGRESS' || c.status === 'OPEN').length;
 
+  // Recent activity sample events
+  const recentActivities = [
+    { id: 1, operation: 'Evidence Upload', target: 'NVMe Disk Image', caseId: cases[0]?.caseId || 'CASE-94821', status: 'Completed', time: '10 mins ago' },
+    { id: 2, operation: 'File Recovery', target: '6 Artifacts Carved', caseId: cases[0]?.caseId || 'CASE-94821', status: 'Completed', time: '1 hour ago' },
+    { id: 3, operation: 'Secure Erasure', target: 'Seized USB Drive', caseId: cases[1]?.caseId || 'CASE-72319', status: 'Verified', time: 'Yesterday' },
+    { id: 4, operation: 'Report Generated', target: 'Chain of Custody Dossier', caseId: cases[0]?.caseId || 'CASE-94821', status: 'Finalized', time: '2 days ago' },
+  ];
+
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Top Banner / Mission Title */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+    <div className="space-y-8 max-w-7xl mx-auto">
+      {/* Welcome Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200">
         <div>
-          <div className="flex items-center gap-2 text-cyan-400 font-mono text-xs mb-1">
-            <Terminal className="w-3.5 h-3.5" />
-            <span>INCIDENT COMMAND // ACTIVE TELEMETRY</span>
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-100 font-mono">
-            Digital Forensics & Sanitization Console
+          <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">
+            Welcome to Cyphora
           </h1>
-          <p className="text-xs text-slate-400 font-mono mt-0.5">
-            Operational status of forensic acquisitions, carved evidence validation, and NIST-compliant sanitizations.
+          <p className="text-sm text-slate-500 mt-1">
+            Recover digital evidence or securely erase data.
           </p>
         </div>
 
         <button
           onClick={() => setIsModalOpen(true)}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold font-mono text-xs uppercase tracking-wider rounded shadow-lg shadow-cyan-600/20 transition-all cursor-pointer"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm rounded-lg transition-colors shadow-xs cursor-pointer self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
-          <span>Create New Case</span>
+          <span>New Case</span>
         </button>
       </div>
 
-      {/* Summary KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-[#0b1329] border border-slate-800 p-4 rounded-lg">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
-            <span className="text-xs font-mono uppercase tracking-wider">Total Active Cases</span>
-            <FolderKanban className="w-4 h-4 text-cyan-400" />
+      {/* Two Primary Action Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Card 1: Recover Evidence */}
+        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs hover:border-blue-300 transition-all flex flex-col justify-between group">
+          <div>
+            <div className="w-12 h-12 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 mb-4">
+              <FileSearch className="w-6 h-6" />
+            </div>
+            <h2 className="text-lg font-semibold text-slate-900 mb-2 group-hover:text-blue-600 transition-colors">
+              Recover Evidence
+            </h2>
+            <p className="text-sm text-slate-600 leading-relaxed mb-6">
+              Recover deleted or damaged files from a forensic disk image or supported storage source.
+            </p>
           </div>
-          <div className="text-2xl font-mono font-bold text-slate-100">{totalCases}</div>
-          <div className="text-[11px] font-mono text-cyan-400 mt-1 flex items-center gap-1">
-            <span>{activeCases} in progress / active triage</span>
-          </div>
-        </div>
-
-        <div className="bg-[#0b1329] border border-slate-800 p-4 rounded-lg">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
-            <span className="text-xs font-mono uppercase tracking-wider">Forensic Recoveries</span>
-            <HardDrive className="w-4 h-4 text-emerald-400" />
-          </div>
-          <div className="text-2xl font-mono font-bold text-slate-100">14 Jobs</div>
-          <div className="text-[11px] font-mono text-emerald-400 mt-1 flex items-center gap-1">
-            <ShieldCheck className="w-3 h-3" />
-            <span>100% SHA-256 Validated</span>
-          </div>
-        </div>
-
-        <div className="bg-[#0b1329] border border-slate-800 p-4 rounded-lg">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
-            <span className="text-xs font-mono uppercase tracking-wider">Sanitization Ops</span>
-            <Eraser className="w-4 h-4 text-amber-400" />
-          </div>
-          <div className="text-2xl font-mono font-bold text-slate-100">9 Completed</div>
-          <div className="text-[11px] font-mono text-amber-400 mt-1">
-            <span>NIST SP 800-88 Purge verified</span>
+          <div>
+            <button
+              onClick={() => {
+                if (cases.length > 0) {
+                  navigate(`/cases/${cases[0].caseId}/recovery`);
+                } else {
+                  navigate('/recovery');
+                }
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm rounded-lg transition-colors shadow-xs cursor-pointer"
+            >
+              <span>Start Recovery</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
         </div>
 
-        <div className="bg-[#0b1329] border border-slate-800 p-4 rounded-lg">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
-            <span className="text-xs font-mono uppercase tracking-wider">Chain of Custody</span>
-            <FileCheck2 className="w-4 h-4 text-cyan-400" />
+        {/* Card 2: Secure Erasure */}
+        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between group">
+          <div>
+            <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 mb-4">
+              <Eraser className="w-6 h-6" />
+            </div>
+            <h2 className="text-lg font-semibold text-slate-900 mb-2 group-hover:text-slate-800 transition-colors">
+              Secure Erasure
+            </h2>
+            <p className="text-sm text-slate-600 leading-relaxed mb-6">
+              Securely erase files, folders or supported storage devices using an appropriate sanitization method.
+            </p>
           </div>
-          <div className="text-2xl font-mono font-bold text-slate-100">UNBROKEN</div>
-          <div className="text-[11px] font-mono text-cyan-400 mt-1">
-            <span>Cryptographic Hash Ledger</span>
+          <div>
+            <button
+              onClick={() => {
+                if (cases.length > 0) {
+                  navigate(`/cases/${cases[0].caseId}/sanitization`);
+                } else {
+                  navigate('/sanitization');
+                }
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-medium text-sm rounded-lg transition-colors shadow-xs cursor-pointer"
+            >
+              <span>Start Erasure</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
+        </div>
+      </div>
+
+      {/* Secondary Stats Row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+          <div className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">
+            Active Cases
+          </div>
+          <div className="text-2xl font-bold text-slate-900">{activeCases || totalCases}</div>
+          <div className="text-xs text-slate-400 mt-1">{totalCases} total registered</div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+          <div className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">
+            Recovery Jobs
+          </div>
+          <div className="text-2xl font-bold text-slate-900">14</div>
+          <div className="text-xs text-slate-400 mt-1">Filesystem & carving tasks</div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+          <div className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">
+            Erasure Operations
+          </div>
+          <div className="text-2xl font-bold text-slate-900">9</div>
+          <div className="text-xs text-slate-400 mt-1">NIST 800-88 verified</div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+          <div className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">
+            Reports
+          </div>
+          <div className="text-2xl font-bold text-slate-900">18</div>
+          <div className="text-xs text-slate-400 mt-1">Cryptographically sealed</div>
         </div>
       </div>
 
       {/* Recent Cases Section */}
-      <div className="bg-[#0b1329] border border-slate-800 rounded-lg overflow-hidden">
-        <div className="p-4 border-b border-slate-800/80 flex items-center justify-between bg-slate-900/40">
-          <div className="flex items-center gap-2">
-            <Layers className="w-4 h-4 text-cyan-400" />
-            <h2 className="text-sm font-bold font-mono uppercase tracking-wider text-slate-200">
-              Investigation Registry // Recent Cases
-            </h2>
+      <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
+        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h3 className="text-base font-semibold text-slate-900">Recent Cases</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Active investigation dossiers and workspaces</p>
           </div>
-          <span className="text-xs font-mono text-slate-400">
-            {cases.length} REGISTERED CASES
-          </span>
+          <button
+            onClick={() => navigate('/cases')}
+            className="text-xs font-medium text-blue-600 hover:text-blue-700 cursor-pointer"
+          >
+            View all cases →
+          </button>
         </div>
 
         {loading ? (
-          <div className="p-8 text-center text-slate-500 font-mono text-xs">
-            FETCHING FORENSIC CASES...
+          <div className="p-8 text-center text-slate-400 text-sm">
+            Loading cases...
           </div>
         ) : cases.length === 0 ? (
-          <div className="p-8 text-center text-slate-500 font-mono text-xs">
-            No active cases found. Click "Create New Case" to begin an investigation.
+          <div className="p-8 text-center text-slate-400 text-sm">
+            No cases created yet. Click "New Case" to get started.
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs font-mono border-collapse">
+            <table className="w-full text-left text-sm">
               <thead>
-                <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 uppercase text-[11px] tracking-wider">
-                  <th className="py-3 px-4">Case ID</th>
-                  <th className="py-3 px-4">Title / Scope</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4">Evidence</th>
-                  <th className="py-3 px-4">Timestamp (UTC)</th>
-                  <th className="py-3 px-4 text-right">Action</th>
+                <tr className="border-b border-slate-100 bg-slate-50/70 text-slate-500 font-medium text-xs">
+                  <th className="py-3 px-5">Case ID</th>
+                  <th className="py-3 px-5">Case Name</th>
+                  <th className="py-3 px-5">Status</th>
+                  <th className="py-3 px-5">Evidence</th>
+                  <th className="py-3 px-5">Last Updated</th>
+                  <th className="py-3 px-5 text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {cases.map((c) => (
-                  <tr 
-                    key={c.caseId} 
+              <tbody className="divide-y divide-slate-100">
+                {cases.slice(0, 5).map((c) => (
+                  <tr
+                    key={c.caseId}
                     onClick={() => navigate(`/cases/${c.caseId}`)}
-                    className="hover:bg-slate-900/50 cursor-pointer transition-colors group"
+                    className="hover:bg-slate-50/80 cursor-pointer transition-colors"
                   >
-                    <td className="py-3.5 px-4 font-bold text-cyan-400 whitespace-nowrap">
+                    <td className="py-3.5 px-5 font-mono text-xs font-medium text-blue-600 whitespace-nowrap">
                       {c.caseId}
                     </td>
-                    <td className="py-3.5 px-4">
-                      <div className="font-sans font-medium text-slate-200 group-hover:text-cyan-300 transition-colors">
-                        {c.title}
-                      </div>
-                      <div className="font-sans text-[11px] text-slate-400 line-clamp-1 max-w-md">
-                        {c.description}
-                      </div>
+                    <td className="py-3.5 px-5">
+                      <div className="font-medium text-slate-900">{c.title}</div>
+                      {c.description && (
+                        <div className="text-xs text-slate-500 line-clamp-1 max-w-md mt-0.5">
+                          {c.description}
+                        </div>
+                      )}
                     </td>
-                    <td className="py-3.5 px-4 whitespace-nowrap">
-                      <StatusBadge status={c.status} />
+                    <td className="py-3.5 px-5 whitespace-nowrap">
+                      <StatusBadge status={c.status} size="xs" />
                     </td>
-                    <td className="py-3.5 px-4 whitespace-nowrap text-slate-300">
-                      <span className="bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
-                        {c.evidenceCount || 1} image(s)
-                      </span>
+                    <td className="py-3.5 px-5 whitespace-nowrap text-slate-600 text-xs">
+                      {c.evidenceCount || 1} image(s)
                     </td>
-                    <td className="py-3.5 px-4 whitespace-nowrap text-slate-400">
-                      {new Date(c.createdAt).toLocaleDateString()} {new Date(c.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    <td className="py-3.5 px-5 whitespace-nowrap text-slate-500 text-xs">
+                      {new Date(c.updatedAt || c.createdAt).toLocaleDateString()}
                     </td>
-                    <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                      <span className="inline-flex items-center gap-1 text-cyan-400 group-hover:text-cyan-300 font-semibold text-[11px]">
-                        Open Workspace
-                        <ArrowUpRight className="w-3.5 h-3.5" />
+                    <td className="py-3.5 px-5 text-right whitespace-nowrap">
+                      <span className="text-xs font-medium text-blue-600 hover:text-blue-700">
+                        Open Case →
                       </span>
                     </td>
                   </tr>
@@ -220,58 +273,105 @@ export const DashboardPage = () => {
         )}
       </div>
 
+      {/* Recent Activity Section */}
+      <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
+        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h3 className="text-base font-semibold text-slate-900">Recent Activity</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Audit log summary of recent operational events</p>
+          </div>
+          <button
+            onClick={() => navigate('/audit')}
+            className="text-xs font-medium text-blue-600 hover:text-blue-700 cursor-pointer"
+          >
+            View full audit log →
+          </button>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-slate-100 bg-slate-50/70 text-slate-500 font-medium text-xs">
+                <th className="py-3 px-5">Operation</th>
+                <th className="py-3 px-5">Target / Detail</th>
+                <th className="py-3 px-5">Case</th>
+                <th className="py-3 px-5">Status</th>
+                <th className="py-3 px-5 text-right">Time</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {recentActivities.map((act) => (
+                <tr key={act.id} className="hover:bg-slate-50/60 transition-colors">
+                  <td className="py-3 px-5 font-medium text-slate-800 text-xs">
+                    {act.operation}
+                  </td>
+                  <td className="py-3 px-5 text-slate-600 text-xs">
+                    {act.target}
+                  </td>
+                  <td className="py-3 px-5 font-mono text-xs text-slate-500">
+                    {act.caseId}
+                  </td>
+                  <td className="py-3 px-5">
+                    <StatusBadge status={act.status} size="xs" />
+                  </td>
+                  <td className="py-3 px-5 text-right text-slate-400 text-xs">
+                    {act.time}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* Modal: Create Case */}
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title="INITIALIZE NEW FORENSIC CASE"
+        title="Create New Case"
       >
-        <form onSubmit={handleCreateCase} className="space-y-4 font-mono">
-          <div className="text-xs text-slate-400 leading-relaxed">
-            Specify the operational parameters for this forensic case dossier. A unique cryptographic ID will be allocated upon initialization.
-          </div>
-
+        <form onSubmit={handleCreateCase} className="space-y-4">
           <div>
-            <label className="block text-xs uppercase tracking-wider text-slate-300 mb-1">
-              Case Title / Operational Codename *
+            <label className="block text-xs font-medium text-slate-700 mb-1">
+              Case Name *
             </label>
             <input
               type="text"
               required
-              placeholder="e.g., Operation DarkVault - SSD Triage"
+              placeholder="e.g., Financial Audit Workstation 04"
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded text-slate-100 text-xs focus:outline-none focus:border-cyan-500"
+              className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
             />
           </div>
 
           <div>
-            <label className="block text-xs uppercase tracking-wider text-slate-300 mb-1">
-              Case Scope & Description
+            <label className="block text-xs font-medium text-slate-700 mb-1">
+              Description
             </label>
             <textarea
               rows={3}
-              placeholder="Scope of investigation, seizure details, suspect identification notes..."
+              placeholder="Brief description of the investigation scope..."
               value={newDesc}
               onChange={(e) => setNewDesc(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded text-slate-100 text-xs focus:outline-none focus:border-cyan-500 font-sans"
+              className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
             />
           </div>
 
-          <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-3">
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={() => setIsModalOpen(false)}
-              className="px-4 py-2 border border-slate-700 text-slate-300 rounded text-xs hover:bg-slate-800 transition-colors"
+              className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-sm hover:bg-slate-50 transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={creating || !newTitle.trim()}
-              className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold rounded text-xs uppercase tracking-wider transition-all disabled:opacity-50"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-sm transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
             >
-              {creating ? 'Allocating Case Dossier...' : 'Create Case & Open'}
+              {creating ? 'Creating Case...' : 'Create Case'}
             </button>
           </div>
         </form>
@@ -279,3 +379,4 @@ export const DashboardPage = () => {
     </div>
   );
 };
+

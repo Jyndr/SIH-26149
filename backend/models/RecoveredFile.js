@@ -25,6 +25,9 @@ const recoveredFileSchema = new mongoose.Schema({
     required: true,
     index: true
   },
+  filename: {
+    type: String
+  },
   originalPath: {
     type: String
   },
@@ -39,6 +42,10 @@ const recoveredFileSchema = new mongoose.Schema({
   },
   fileType: {
     type: String
+  },
+  confidence: {
+    type: Number,
+    default: 100
   },
   recoveryStatus: {
     type: String,

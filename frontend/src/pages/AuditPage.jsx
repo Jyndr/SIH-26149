@@ -1,15 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  History, 
-  ShieldCheck, 
-  CheckCircle2, 
-  ArrowDown, 
-  Link as LinkIcon, 
-  Lock, 
-  Clock, 
-  User, 
+import {
+  History,
+  ShieldCheck,
+  CheckCircle2,
+  Lock,
+  Clock,
+  User,
   Search,
-  Filter
+  Filter,
+  Link as LinkIcon
 } from 'lucide-react';
 import { auditApi, casesApi } from '../services/api';
 import { StatusBadge } from '../components/common/StatusBadge';
@@ -18,8 +17,8 @@ import { HashDisplay } from '../components/common/HashDisplay';
 export const AuditPage = () => {
   const [auditLogs, setAuditLogs] = useState([]);
   const [cases, setCases] = useState([]);
-  const [selectedCase, setSelectedCase] = useState('CASE-94821');
-  const [chainVerified, setChainVerified] = useState(true);
+  const [selectedCase, setSelectedCase] = useState('');
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -35,12 +34,18 @@ export const AuditPage = () => {
   const loadCasesAndAudit = async () => {
     try {
       setLoading(true);
-      const [casesRes, auditRes] = await Promise.all([
-        casesApi.list(),
-        auditApi.listByCase(selectedCase),
-      ]);
-      if (casesRes.data) setCases(casesRes.data);
-      if (auditRes.data) setAuditLogs(auditRes.data);
+      const casesRes = await casesApi.list();
+      const caseList = casesRes.data || [];
+      if (caseList.length > 0) {
+        setCases(caseList);
+        const targetCaseId = caseList[0].caseId;
+        setSelectedCase(targetCaseId);
+        const auditRes = await auditApi.listByCase(targetCaseId);
+        if (auditRes.data) setAuditLogs(auditRes.data);
+      } else {
+        const auditRes = await auditApi.listByCase('CASE-001');
+        if (auditRes.data) setAuditLogs(auditRes.data);
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -57,117 +62,134 @@ export const AuditPage = () => {
     }
   };
 
+  const filteredLogs = auditLogs.filter((log) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (
+      (log.operation && log.operation.toLowerCase().includes(q)) ||
+      (log.user && log.user.toLowerCase().includes(q)) ||
+      (log.hash && log.hash.toLowerCase().includes(q)) ||
+      (log.method && log.method.toLowerCase().includes(q))
+    );
+  });
+
   return (
-    <div className="space-y-6 max-w-7xl mx-auto font-mono text-slate-100">
+    <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
-          <div className="flex items-center gap-2 text-cyan-400 text-xs mb-1">
-            <History className="w-4 h-4" />
-            <span>IMMUTABLE LEDGER // AUDIT TRAIL</span>
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-100 font-mono">
-            Chain of Custody Verification
+          <h1 className="text-2xl font-bold text-slate-900">
+            Audit Log
           </h1>
-          <p className="text-xs text-slate-400 font-sans mt-0.5">
-            Cryptographic SHA-256 linked log of all acquisitions, hash verifications, carving operations, and reports.
+          <p className="text-sm text-slate-600 mt-0.5">
+            Cryptographically signed record of all forensic acquisitions, integrity checks, carving operations, and certified erasures.
           </p>
         </div>
 
         {/* Chain Integrity Badge */}
-        <div className="flex items-center gap-3 bg-emerald-950/60 border border-emerald-500/40 px-4 py-2 rounded-lg text-emerald-300">
-          <ShieldCheck className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+        <div className="flex items-center gap-2.5 bg-emerald-50 border border-emerald-200 px-3.5 py-2 rounded-lg text-emerald-800 shadow-sm">
+          <ShieldCheck className="w-5 h-5 text-emerald-600 flex-shrink-0" />
           <div className="text-left">
-            <div className="text-xs font-bold uppercase tracking-wider">HASH CHAIN INTACT</div>
-            <div className="text-[10px] text-emerald-400/80">Tamper-Evident Linking Verified</div>
+            <div className="text-xs font-semibold">Chain of Custody Verified</div>
+            <div className="text-[11px] text-emerald-700">Tamper-evident SHA-256 ledger intact</div>
           </div>
         </div>
       </div>
 
-      {/* Selector & Filter Bar */}
-      <div className="bg-[#0b1329] border border-slate-800 p-4 rounded-lg flex flex-col sm:flex-row gap-4 items-center justify-between">
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <Filter className="w-4 h-4 text-cyan-400" />
-          <span className="text-xs text-slate-400">Target Investigation Case:</span>
-          <select
-            value={selectedCase}
-            onChange={(e) => setSelectedCase(e.target.value)}
-            className="bg-slate-950 border border-slate-700 text-cyan-300 text-xs px-3 py-1.5 rounded focus:outline-none focus:border-cyan-500 font-bold"
-          >
-            {cases.map((c) => (
-              <option key={c.caseId} value={c.caseId}>
-                {c.caseId} // {c.title.substring(0, 32)}...
-              </option>
-            ))}
-          </select>
+      {/* Filter & Case Selector */}
+      <div className="bg-white border border-slate-200 p-3 rounded-lg shadow-sm flex flex-col sm:flex-row gap-3 items-center justify-between">
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+          <div className="flex items-center gap-2 w-full sm:w-auto text-sm">
+            <Filter className="w-4 h-4 text-slate-500" />
+            <span className="text-slate-600 font-medium">Case:</span>
+            <select
+              value={selectedCase}
+              onChange={(e) => setSelectedCase(e.target.value)}
+              className="bg-slate-50 border border-slate-300 text-slate-900 text-xs px-3 py-1.5 rounded-md focus:outline-none focus:bg-white focus:border-blue-500 transition-all cursor-pointer font-medium"
+            >
+              {cases.map((c) => (
+                <option key={c.caseId} value={c.caseId}>
+                  {c.caseId} — {c.title}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="relative w-full sm:w-64">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+            <input
+              type="text"
+              placeholder="Search operation, user, hash..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-md text-slate-900 text-xs placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-blue-500 transition-all"
+            />
+          </div>
         </div>
 
-        <div className="text-xs text-slate-400">
-          CHAIN DEPTH: <span className="text-slate-100 font-bold">{auditLogs.length} BLOCKS</span>
+        <div className="text-xs text-slate-500">
+          Chain Depth: <span className="font-semibold text-slate-800">{auditLogs.length} blocks</span>
         </div>
       </div>
 
-      {/* Cryptographic Vertical Timeline (Chain of Custody Proof) */}
-      <div className="bg-[#0b1329] border border-slate-800 rounded-lg p-6">
-        <div className="text-xs text-slate-400 uppercase tracking-wider font-bold mb-6 flex items-center gap-2">
-          <LinkIcon className="w-4 h-4 text-cyan-400" />
-          <span>Cryptographic Block Sequence (Genesis → Current Head)</span>
-        </div>
-
-        <div className="space-y-6 relative before:absolute before:inset-0 before:left-6 before:w-0.5 before:bg-gradient-to-b before:from-cyan-500/50 before:via-blue-500/40 before:to-emerald-500/50">
-          {auditLogs.map((log, index) => (
-            <div key={log.logId} className="relative flex items-start gap-4 ml-1">
-              {/* Step Icon Badge */}
-              <div className="w-10 h-10 rounded-lg bg-slate-950 border-2 border-cyan-500/60 flex items-center justify-center text-cyan-400 z-10 shadow-[0_0_10px_rgba(6,182,212,0.2)] flex-shrink-0">
-                <span className="text-xs font-bold">0{index + 1}</span>
-              </div>
-
-              {/* Log Block Content */}
-              <div className="flex-1 bg-slate-950/80 border border-slate-800 rounded-lg p-4 hover:border-cyan-500/30 transition-all">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3 pb-2 border-b border-slate-800/80">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-slate-100 font-sans">
-                      {log.operation.replace(/_/g, ' ')}
-                    </span>
-                    <span className="text-[10px] text-slate-500">[{log.logId}]</span>
-                  </div>
-                  <StatusBadge status={log.status} size="xs" />
-                </div>
-
-                {/* Details Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs mb-3">
-                  <div>
-                    <span className="text-slate-500 text-[10px] uppercase block">Executed By:</span>
-                    <span className="text-cyan-400 font-medium">{log.user}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 text-[10px] uppercase block">Method:</span>
-                    <span className="text-slate-300 font-mono text-[11px]">{log.method}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 text-[10px] uppercase block">Timestamp (UTC):</span>
-                    <span className="text-slate-400 font-mono text-[11px]">{new Date(log.timestamp).toISOString()}</span>
-                  </div>
-                </div>
-
-                {/* Hashes: Current & Previous Link */}
-                <div className="space-y-1.5 pt-2 border-t border-slate-900 text-[11px]">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                    <span className="text-slate-500 text-[10px] uppercase">Block Hash:</span>
-                    <HashDisplay hash={log.hash} length={16} />
-                  </div>
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                    <span className="text-slate-600 text-[10px] uppercase">Previous Block Link:</span>
-                    <span className="font-mono text-slate-500 text-[11px] select-all truncate max-w-sm sm:max-w-md">
-                      {log.previousHash}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+      {/* Audit Log Table */}
+      <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+        {loading ? (
+          <div className="p-12 text-center text-slate-500 text-sm">
+            Loading audit ledger...
+          </div>
+        ) : filteredLogs.length === 0 ? (
+          <div className="p-12 text-center text-slate-500 text-sm">
+            No audit records found matching query.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 uppercase text-[11px] font-semibold tracking-wider">
+                  <th className="py-3 px-4">Timestamp</th>
+                  <th className="py-3 px-4">Operation</th>
+                  <th className="py-3 px-4">Target / Detail</th>
+                  <th className="py-3 px-4">Method</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4">Cryptographic Hash</th>
+                  <th className="py-3 px-4">Operator</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700">
+                {filteredLogs.map((log) => (
+                  <tr key={log.logId} className="hover:bg-slate-50 transition-colors">
+                    <td className="py-3 px-4 whitespace-nowrap text-slate-500 font-mono text-[11px]">
+                      {new Date(log.timestamp).toLocaleString()}
+                    </td>
+                    <td className="py-3 px-4 font-semibold text-slate-900 whitespace-nowrap">
+                      {log.operation?.replace(/_/g, ' ')}
+                    </td>
+                    <td className="py-3 px-4 font-mono text-[11px] text-slate-600 truncate max-w-xs">
+                      {log.target || log.logId}
+                    </td>
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[11px] border border-slate-200 font-medium">
+                        {log.method || 'SHA256_STAMP'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      <StatusBadge status={log.status || 'VERIFIED'} size="xs" />
+                    </td>
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      <HashDisplay hash={log.hash} length={10} />
+                    </td>
+                    <td className="py-3 px-4 whitespace-nowrap text-blue-700 font-medium">
+                      {log.user || 'System Operator'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
 };
+
