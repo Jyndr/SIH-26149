@@ -24,25 +24,17 @@ export const ReportsPage = () => {
       const caseList = casesRes.data || [];
       setCases(caseList);
 
-      if (caseList.length > 0) {
-        if (selectedCase !== 'ALL') {
-          const res = await reportsApi.listByCase(selectedCase);
-          setReports(res.data || []);
-        } else {
-          const reportsNested = await Promise.all(
-            caseList.map((c) => reportsApi.listByCase(c.caseId).catch(() => ({ data: [] })))
-          );
-          const allReports = reportsNested.flatMap((r) => r.data || []);
-          if (allReports.length > 0) {
-            setReports(allReports);
-          } else {
-            const fallback = await reportsApi.listByCase('CASE-001');
-            setReports(fallback.data || []);
-          }
-        }
+      const res = await reportsApi.listByCase(selectedCase || 'ALL');
+      if (res.data && res.data.length > 0) {
+        setReports(res.data);
+      } else if (caseList.length > 0 && selectedCase === 'ALL') {
+        const reportsNested = await Promise.all(
+          caseList.map((c) => reportsApi.listByCase(c.caseId).catch(() => ({ data: [] })))
+        );
+        const allReports = reportsNested.flatMap((r) => r.data || []);
+        setReports(allReports);
       } else {
-        const res = await reportsApi.listByCase('CASE-001');
-        if (res.data) setReports(res.data);
+        setReports(res.data || []);
       }
     } catch (e) {
       console.error(e);
@@ -51,7 +43,27 @@ export const ReportsPage = () => {
     }
   };
 
-  const handleDownload = (rep) => {
+  const handleDownload = async (rep) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/v1/reports/${rep.reportId}/download`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${rep.reportId}_ForensicDossier.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        return;
+      }
+    } catch (err) {
+      console.warn('Report download fallback:', err);
+    }
     const element = document.createElement('a');
     const text = JSON.stringify(rep, null, 2);
     const blob = new Blob([text], { type: 'application/json' });

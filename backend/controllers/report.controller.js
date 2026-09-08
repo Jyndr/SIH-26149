@@ -15,9 +15,16 @@ const reportController = {
       next(error);
     }
   },
+  async listAll(req, res, next) {
+    try {
+      const result = await reportService.listAll(parsePagination(req.query));
+      res.json({ success: true, data: result.reports, pagination: { total: result.total, page: result.page, limit: result.limit } });
+    } catch (error) { next(error); }
+  },
   async listByCase(req, res, next) {
     try {
-      const result = await reportService.listByCase(req.case._id, parsePagination(req.query));
+      const targetId = req.case?._id || req.params.caseId;
+      const result = await reportService.listByCase(targetId, parsePagination(req.query));
       res.json({ success: true, data: result.reports, pagination: { total: result.total, page: result.page, limit: result.limit } });
     } catch (error) { next(error); }
   },

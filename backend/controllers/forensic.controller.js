@@ -1,3 +1,4 @@
+import fs from 'fs';
 import forensicArtifactService from '../services/forensicArtifact.service.js';
 import forensicAnalystService from '../services/forensicAnalyst.service.js';
 
@@ -10,6 +11,22 @@ const forensicController = {
         success: true,
         data: overview
       });
+    } catch (error) {
+      if (error.message.includes('not found')) {
+        return res.status(404).json({ success: false, error: { message: error.message } });
+      }
+      next(error);
+    }
+  },
+
+  downloadReportJson: async (req, res, next) => {
+    try {
+      const { evidenceId } = req.params;
+      const reportPath = await forensicArtifactService.getReportPath(evidenceId);
+      if (!reportPath || !fs.existsSync(reportPath)) {
+        return res.status(404).json({ success: false, error: { message: 'report.json not found on disk' } });
+      }
+      res.download(reportPath, `${evidenceId}_forensic_report.json`);
     } catch (error) {
       if (error.message.includes('not found')) {
         return res.status(404).json({ success: false, error: { message: error.message } });

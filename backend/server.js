@@ -127,13 +127,12 @@ app.use(errorHandler);
 
 const startServer = async () => {
   try {
-    await connectDB();
-
     app.listen(PORT, '0.0.0.0', () => {
       logger.info(`Server running on port ${PORT}`);
       logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
     });
 
+    await connectDB();
   } catch (error) {
     logger.error(`Failed to start server: ${error.message}`);
     process.exit(1);

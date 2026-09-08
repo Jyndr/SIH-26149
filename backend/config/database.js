@@ -9,7 +9,9 @@ const connectDB = async () => {
 
     logger.info('Connecting to MongoDB...');
 
-    const conn = await mongoose.connect(process.env.MONGODB_URI);
+    const conn = await mongoose.connect(process.env.MONGODB_URI, {
+      dbName: process.env.MONGODB_DB_NAME || 'cyphora'
+    });
 
     logger.info(`MongoDB Connected: ${conn.connection.host}`);
 

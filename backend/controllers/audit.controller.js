@@ -6,9 +6,23 @@ const parsePagination = (query) => ({
 });
 
 const auditController = {
+  listAll: async (req, res, next) => {
+    try {
+      const result = await auditService.listAll(parsePagination(req.query));
+      res.json({
+        success: true,
+        data: result.entries,
+        pagination: { total: result.total, page: result.page, limit: result.limit }
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
   verifyChain: async (req, res, next) => {
     try {
-      const result = await auditService.verifyChain(req.case?._id);
+      const targetId = req.case?._id || req.params.caseId || req.query.caseId;
+      const result = await auditService.verifyChain(targetId);
       res.json({ success: true, data: result });
     } catch (error) {
       next(error);
@@ -17,7 +31,8 @@ const auditController = {
 
   listByCase: async (req, res, next) => {
     try {
-      const result = await auditService.listByCase(req.case._id, parsePagination(req.query));
+      const targetId = req.case?._id || req.params.caseId;
+      const result = await auditService.listByCase(targetId, parsePagination(req.query));
       res.json({
         success: true,
         data: result.entries,

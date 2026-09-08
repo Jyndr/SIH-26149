@@ -3,10 +3,11 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Briefcase,
-  FileSearch,
+  HardDrive,
   Eraser,
   FileText,
   History,
+  Sparkles,
   LogOut,
   Shield
 } from 'lucide-react';
@@ -32,7 +33,7 @@ export const Sidebar = () => {
     {
       title: 'OPERATIONS',
       items: [
-        { to: '/recovery', label: 'Forensic Analyst', icon: FileSearch },
+        { to: '/recovery', label: 'Evidence Recovery', icon: HardDrive },
         { to: '/sanitization', label: 'Secure Erasure', icon: Eraser },
       ]
     },
@@ -41,6 +42,7 @@ export const Sidebar = () => {
       items: [
         { to: '/reports', label: 'Reports', icon: FileText },
         { to: '/audit', label: 'Audit Log', icon: History },
+        { to: '/analyst', label: 'Forensic Analyst', icon: Sparkles },
       ]
     }
   ];

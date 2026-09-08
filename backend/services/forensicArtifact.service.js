@@ -1107,6 +1107,12 @@ const forensicArtifactService = {
     const data = await loadAndIndexReport(evidence);
     if (!data) throw new Error('Forensic analysis report not available for this evidence');
     return { evidence, data };
+  },
+
+  getReportPath: async (evidenceId) => {
+    const evidence = await findEvidenceByParam(Evidence, evidenceId);
+    if (!evidence) return null;
+    return getReportPathForEvidence(evidence);
   }
 };
 

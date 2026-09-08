@@ -12,12 +12,13 @@ import {
   Activity,
   HardDrive
 } from 'lucide-react';
-import { casesApi } from '../services/api';
+import { casesApi, auditApi } from '../services/api';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { Modal } from '../components/common/Modal';
 
 export const DashboardPage = () => {
   const [cases, setCases] = useState([]);
+  const [recentActivities, setRecentActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -27,16 +28,30 @@ export const DashboardPage = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchCases();
+    fetchDashboardData();
   }, []);
 
-  const fetchCases = async () => {
+  const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const res = await casesApi.list();
-      if (res.data) setCases(res.data);
+      const [casesRes, auditRes] = await Promise.all([
+        casesApi.list().catch(() => ({ data: [] })),
+        auditApi.listByCase('ALL').catch(() => ({ data: [] }))
+      ]);
+      if (casesRes.data) setCases(casesRes.data);
+      if (auditRes.data && Array.isArray(auditRes.data)) {
+        const mapped = auditRes.data.slice(0, 5).map((a) => ({
+          id: a.logId || a.auditId,
+          operation: a.operation?.replace(/_/g, ' ') || 'Operation',
+          target: a.target || a.method || 'System Record',
+          caseId: a.caseId || 'System',
+          status: a.status || 'VERIFIED',
+          time: new Date(a.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }));
+        setRecentActivities(mapped);
+      }
     } catch (e) {
-      console.error('Failed to load cases:', e);
+      console.error('Failed to load dashboard data:', e);
     } finally {
       setLoading(false);
     }
@@ -68,14 +83,6 @@ export const DashboardPage = () => {
 
   const totalCases = cases.length;
   const activeCases = cases.filter(c => c.status === 'IN_PROGRESS' || c.status === 'OPEN').length;
-
-  // Recent activity sample events
-  const recentActivities = [
-    { id: 1, operation: 'Evidence Upload', target: 'NVMe Disk Image', caseId: cases[0]?.caseId || 'CASE-94821', status: 'Completed', time: '10 mins ago' },
-    { id: 2, operation: 'File Recovery', target: '6 Artifacts Carved', caseId: cases[0]?.caseId || 'CASE-94821', status: 'Completed', time: '1 hour ago' },
-    { id: 3, operation: 'Secure Erasure', target: 'Seized USB Drive', caseId: cases[1]?.caseId || 'CASE-72319', status: 'Verified', time: 'Yesterday' },
-    { id: 4, operation: 'Report Generated', target: 'Chain of Custody Dossier', caseId: cases[0]?.caseId || 'CASE-94821', status: 'Finalized', time: '2 days ago' },
-  ];
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
@@ -288,40 +295,46 @@ export const DashboardPage = () => {
           </button>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 bg-slate-50/70 text-slate-500 font-medium text-xs">
-                <th className="py-3 px-5">Operation</th>
-                <th className="py-3 px-5">Target / Detail</th>
-                <th className="py-3 px-5">Case</th>
-                <th className="py-3 px-5">Status</th>
-                <th className="py-3 px-5 text-right">Time</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {recentActivities.map((act) => (
-                <tr key={act.id} className="hover:bg-slate-50/60 transition-colors">
-                  <td className="py-3 px-5 font-medium text-slate-800 text-xs">
-                    {act.operation}
-                  </td>
-                  <td className="py-3 px-5 text-slate-600 text-xs">
-                    {act.target}
-                  </td>
-                  <td className="py-3 px-5 font-mono text-xs text-slate-500">
-                    {act.caseId}
-                  </td>
-                  <td className="py-3 px-5">
-                    <StatusBadge status={act.status} size="xs" />
-                  </td>
-                  <td className="py-3 px-5 text-right text-slate-400 text-xs">
-                    {act.time}
-                  </td>
+        {recentActivities.length === 0 ? (
+          <div className="py-10 text-center text-slate-500 text-xs">
+            No recent forensic activity recorded yet. Create a case or run a recovery to start.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/70 text-slate-500 font-medium text-xs">
+                  <th className="py-3 px-5">Operation</th>
+                  <th className="py-3 px-5">Target / Detail</th>
+                  <th className="py-3 px-5">Case</th>
+                  <th className="py-3 px-5">Status</th>
+                  <th className="py-3 px-5 text-right">Time</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {recentActivities.map((act) => (
+                  <tr key={act.id} className="hover:bg-slate-50/60 transition-colors">
+                    <td className="py-3 px-5 font-medium text-slate-800 text-xs">
+                      {act.operation}
+                    </td>
+                    <td className="py-3 px-5 text-slate-600 text-xs">
+                      {act.target}
+                    </td>
+                    <td className="py-3 px-5 font-mono text-xs text-slate-500">
+                      {act.caseId}
+                    </td>
+                    <td className="py-3 px-5">
+                      <StatusBadge status={act.status} size="xs" />
+                    </td>
+                    <td className="py-3 px-5 text-right text-slate-400 text-xs">
+                      {act.time}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Modal: Create Case */}

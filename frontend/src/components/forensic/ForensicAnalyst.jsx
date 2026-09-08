@@ -31,7 +31,8 @@ import {
   Folder,
   KeyRound,
   Sliders,
-  Cpu
+  Cpu,
+  Binary
 } from 'lucide-react';
 import { forensicApi } from '../../services/api';
 

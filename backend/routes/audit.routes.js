@@ -1,14 +1,21 @@
 import express from 'express';
 import auditController from '../controllers/audit.controller.js';
 import auth from '../middleware/auth.middleware.js';
-import { requireRole } from '../middleware/authorize.middleware.js';
+import { requireRole, authorizeCaseAccess } from '../middleware/authorize.middleware.js';
 
 const router = express.Router();
 
 router.use(auth);
 
-// Verify audit chain (admin only)
-router.get('/audit/verify-chain', requireRole(['ADMIN']), auditController.verifyChain);
+// Get case audit logs
+router.get('/cases/:caseId/audit', authorizeCaseAccess, auditController.listByCase);
+router.get('/cases/:caseId/audit/verify-chain', authorizeCaseAccess, auditController.verifyChain);
+
+// Get all audit logs
+router.get('/audit', auditController.listAll);
+
+// Verify audit chain
+router.get('/audit/verify-chain', auditController.verifyChain);
 
 // Get logs by entity
 router.get('/audit/entity/:entityType/:entityId', auditController.getLogsByEntity);

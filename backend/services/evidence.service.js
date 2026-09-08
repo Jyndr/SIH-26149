@@ -1,4 +1,6 @@
+import mongoose from 'mongoose';
 import Evidence from '../models/Evidence.js';
+import Case from '../models/Case.js';
 import storageService from './storage/storage.service.js';
 import hashService from './hash/hash.service.js';
 import auditService from './audit/audit.service.js';
@@ -66,9 +68,25 @@ const evidenceService = {
     }
   },
 
-  list: async (caseId, userId) => {
+  list: async (caseIdParam, userId) => {
     try {
-      const evidence = await Evidence.find({ caseId }).sort({ createdAt: -1 });
+      let targetCaseId = caseIdParam;
+      let foundCase = null;
+      if (!mongoose.Types.ObjectId.isValid(caseIdParam)) {
+        foundCase = await Case.findOne({ caseId: caseIdParam });
+        if (foundCase) {
+          targetCaseId = foundCase._id;
+        }
+      } else {
+        foundCase = await Case.findById(caseIdParam);
+      }
+      const queryOr = [{ caseId: targetCaseId }];
+      if (foundCase) {
+        queryOr.push({ caseId: foundCase._id });
+        if (foundCase.caseId) queryOr.push({ caseId: foundCase.caseId });
+      }
+      if (caseIdParam) queryOr.push({ caseId: caseIdParam });
+      const evidence = await Evidence.find({ $or: queryOr }).sort({ createdAt: -1 });
       return evidence;
     } catch (error) {
       logger.error(`Error listing evidence: ${error.message}`);

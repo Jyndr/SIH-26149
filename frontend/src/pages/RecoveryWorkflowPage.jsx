@@ -21,21 +21,22 @@ import {
   HelpCircle,
   FolderKanban,
   FileCheck,
-  Sparkles
+  Sparkles,
+  Search,
+  ExternalLink
 } from 'lucide-react';
-import { casesApi, evidenceApi, recoveryApi, jobsApi, reportsApi } from '../services/api';
+import { casesApi, evidenceApi, recoveryApi, forensicApi, jobsApi, reportsApi } from '../services/api';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { HashDisplay } from '../components/common/HashDisplay';
 import { Modal } from '../components/common/Modal';
 import { ForensicExplorer } from '../components/forensic/ForensicExplorer';
-import { ForensicAnalyst } from '../components/forensic/ForensicAnalyst';
 
 export const RecoveryWorkflowPage = () => {
   const { caseId: paramCaseId } = useParams();
   const navigate = useNavigate();
 
-  // View mode: 'ANALYST' | 'EXPLORER' | 'PIPELINE'
-  const [viewMode, setViewMode] = useState('ANALYST');
+  // View mode: 'PIPELINE' | 'EXPLORER' (Forensic Analyst is in its own dedicated page)
+  const [viewMode, setViewMode] = useState('PIPELINE');
 
   // Case Selection state
   const [selectedCaseId, setSelectedCaseId] = useState(paramCaseId || '');
@@ -46,6 +47,8 @@ export const RecoveryWorkflowPage = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [evidence, setEvidence] = useState(null);
+  const [uploadError, setUploadError] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   // Step 3: Verification & Analysis state
   const [verifying, setVerifying] = useState(false);
@@ -56,7 +59,8 @@ export const RecoveryWorkflowPage = () => {
   // Step 4: Recovered Files
   const [recoveredFiles, setRecoveredFiles] = useState([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
-  const [artifactFilter, setArtifactFilter] = useState('ALL'); // ALL, VALIDATED, PARTIAL
+  const [artifactFilter, setArtifactFilter] = useState('ALL'); // ALL, DOCS, IMAGES, TEXT, OTHER
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Step 5: File Details modal & Report state
   const [selectedFileDetail, setSelectedFileDetail] = useState(null);
@@ -109,15 +113,14 @@ export const RecoveryWorkflowPage = () => {
       if (res.data && res.data.length > 0) {
         const ev = res.data[0];
         setEvidence(ev);
-        if (ev.integrity?.verified) {
-          loadRecoveredFiles(ev.evidenceId);
-        }
+        loadRecoveredFiles(ev.evidenceId);
       } else {
         setEvidence(null);
-        setRecoveredFiles([]);
+        loadRecoveredFiles(cId);
       }
     } catch (e) {
       console.error('Error loading evidence:', e);
+      loadRecoveredFiles(cId);
     }
   };
 
@@ -178,13 +181,22 @@ export const RecoveryWorkflowPage = () => {
     if (!selectedFile || !selectedCaseId) return;
 
     setUploading(true);
+    setUploadError(null);
+    setUploadProgress(0);
     try {
-      const res = await evidenceApi.upload(selectedCaseId, selectedFile);
+      const res = await evidenceApi.upload(selectedCaseId, selectedFile, (progressEvent) => {
+        if (progressEvent.total) {
+          const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setUploadProgress(percent);
+        }
+      });
       if (res.data) {
         setEvidence(res.data);
       }
     } catch (err) {
       console.error('Upload failed:', err);
+      const msg = err.response?.data?.error?.message || err.message || 'Evidence disk image upload failed';
+      setUploadError(msg);
     } finally {
       setUploading(false);
     }
@@ -211,6 +223,7 @@ export const RecoveryWorkflowPage = () => {
       const res = await evidenceApi.verifyIntegrity(evidence.evidenceId);
       if (res.data) {
         setEvidence(res.data);
+        loadRecoveredFiles(evidence.evidenceId);
       }
     } catch (err) {
       console.error('Verification failed:', err);
@@ -307,6 +320,17 @@ export const RecoveryWorkflowPage = () => {
 
   // Download artifact file
   const handleDownloadArtifact = (file) => {
+    const artifactId = file.metadata?.artifactId || file.artifactId;
+    if (evidence?.evidenceId && artifactId) {
+      const link = document.createElement('a');
+      link.href = forensicApi.getArtifactDownloadUrl(evidence.evidenceId, artifactId);
+      link.download = file.filename || 'recovered_file';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      return;
+    }
+
     const fileId = file.recoveredFileId || file._id;
     if (fileId && typeof recoveryApi.getDownloadUrl === 'function') {
       const link = document.createElement('a');
@@ -317,6 +341,7 @@ export const RecoveryWorkflowPage = () => {
       document.body.removeChild(link);
       return;
     }
+
     const element = document.createElement('a');
     const fileContent = `--- CYPHORA FORENSIC RECOVERED ARTIFACT ---\nArtifact ID: ${file.recoveredFileId}\nFilename: ${file.filename}\nOriginal Path: ${file.originalPath || 'Unallocated Sector Stream'}\nSource Method: ${file.source}\nSize: ${file.size} bytes\nSHA-256 Digest: ${file.sha256}\nValidation Status: ${file.validation}\nConfidence Level: ${file.confidence}\nRecovery Integrity: ${file.recoveryCompleteness}\nGenerated: ${new Date().toISOString()}`;
     const blob = new Blob([fileContent], { type: 'text/plain' });
@@ -340,13 +365,44 @@ export const RecoveryWorkflowPage = () => {
     document.body.removeChild(element);
   };
 
-  // Metrics for honest recovery assessment
-  const highConfidenceCount = recoveredFiles.filter(f => f.confidence === 'HIGH').length;
-  const partialCount = recoveredFiles.filter(f => f.confidence === 'MEDIUM' || f.confidence === 'LOW').length;
+  // Category counts
+  const isDocExt = (ext) => ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'rtf', 'odt', 'csv'].includes(ext);
+  const isImgExt = (ext) => ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff', 'svg'].includes(ext);
+  const isTxtExt = (ext) => ['txt', 'log', 'eml', 'msg', 'json', 'xml', 'ini', 'html', 'htm'].includes(ext);
+
+  const docCount = recoveredFiles.filter(f => {
+    const ext = (f.fileType || f.filename?.split('.').pop() || '').toLowerCase();
+    return isDocExt(ext) || f.metadata?.category === 'document';
+  }).length;
+
+  const imgCount = recoveredFiles.filter(f => {
+    const ext = (f.fileType || f.filename?.split('.').pop() || '').toLowerCase();
+    return isImgExt(ext) || f.metadata?.category === 'image';
+  }).length;
+
+  const txtCount = recoveredFiles.filter(f => {
+    const ext = (f.fileType || f.filename?.split('.').pop() || '').toLowerCase();
+    return isTxtExt(ext);
+  }).length;
 
   const filteredArtifacts = recoveredFiles.filter(f => {
-    if (artifactFilter === 'VALIDATED') return f.confidence === 'HIGH';
-    if (artifactFilter === 'PARTIAL') return f.confidence === 'MEDIUM' || f.confidence === 'LOW';
+    const ext = (f.fileType || f.filename?.split('.').pop() || '').toLowerCase();
+    const isDoc = isDocExt(ext) || f.metadata?.category === 'document';
+    const isImg = isImgExt(ext) || f.metadata?.category === 'image';
+    const isTxt = isTxtExt(ext);
+
+    if (artifactFilter === 'DOCS' && !isDoc) return false;
+    if (artifactFilter === 'IMAGES' && !isImg) return false;
+    if (artifactFilter === 'TEXT' && !isTxt) return false;
+    if (artifactFilter === 'OTHER' && (isDoc || isImg || isTxt)) return false;
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchName = (f.filename || '').toLowerCase().includes(q);
+      const matchPath = (f.originalPath || '').toLowerCase().includes(q);
+      const matchHash = (f.sha256 || '').toLowerCase().includes(q);
+      return matchName || matchPath || matchHash;
+    }
     return true;
   });
 
@@ -375,12 +431,12 @@ export const RecoveryWorkflowPage = () => {
           {evidence && (
             <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200">
               <button
-                onClick={() => setViewMode('ANALYST')}
-                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${viewMode === 'ANALYST' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                onClick={() => setViewMode('PIPELINE')}
+                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${viewMode === 'PIPELINE' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
                   }`}
               >
-                <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                <span>Forensic Analyst</span>
+                <UploadCloud className="w-3.5 h-3.5" />
+                <span>Recovery Pipeline</span>
               </button>
               <button
                 onClick={() => setViewMode('EXPLORER')}
@@ -388,15 +444,7 @@ export const RecoveryWorkflowPage = () => {
                   }`}
               >
                 <Layers className="w-3.5 h-3.5" />
-                <span>Deep Explorer</span>
-              </button>
-              <button
-                onClick={() => setViewMode('PIPELINE')}
-                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${viewMode === 'PIPELINE' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-              >
-                <UploadCloud className="w-3.5 h-3.5" />
-                <span>Acquisition Pipeline</span>
+                <span>Forensic Explorer</span>
               </button>
             </div>
           )}
@@ -407,17 +455,11 @@ export const RecoveryWorkflowPage = () => {
         </div>
       </div>
 
-      {viewMode === 'ANALYST' && evidence ? (
-        <ForensicAnalyst
-          evidenceId={evidence.evidenceId}
-          caseId={selectedCaseId}
-          onSwitchToPipeline={() => setViewMode('PIPELINE')}
-        />
-      ) : viewMode === 'EXPLORER' && evidence ? (
+      {viewMode === 'EXPLORER' && evidence ? (
         <ForensicExplorer
           evidenceId={evidence.evidenceId}
           caseId={selectedCaseId}
-          onBack={() => setViewMode('ANALYST')}
+          onBack={() => setViewMode('PIPELINE')}
         />
       ) : (
         <>
@@ -552,6 +594,28 @@ export const RecoveryWorkflowPage = () => {
                     </label>
                   </div>
 
+                  {uploadError && (
+                    <div className="flex items-center gap-2 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-lg">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                      <span>{uploadError}</span>
+                    </div>
+                  )}
+
+                  {uploading && (
+                    <div className="space-y-1.5 pt-1">
+                      <div className="flex justify-between text-xs text-slate-600 font-medium">
+                        <span>Ingesting and computing SHA-256...</span>
+                        <span>{uploadProgress}%</span>
+                      </div>
+                      <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                        <div
+                          className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${uploadProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
                     <button
                       type="button"
@@ -564,9 +628,10 @@ export const RecoveryWorkflowPage = () => {
                     <button
                       type="submit"
                       disabled={!selectedFile || uploading}
-                      className="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs rounded-md shadow-sm transition-colors disabled:opacity-40 cursor-pointer"
+                      className="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs rounded-md shadow-sm transition-colors disabled:opacity-40 cursor-pointer flex items-center gap-2 justify-center"
                     >
-                      {uploading ? 'Ingesting Disk Image...' : 'Ingest Image & Compute SHA-256'}
+                      {uploading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                      <span>{uploading ? `Ingesting (${uploadProgress}%)...` : 'Ingest Image & Compute SHA-256'}</span>
                     </button>
                   </div>
                 </form>
@@ -715,207 +780,219 @@ export const RecoveryWorkflowPage = () => {
             </div>
           </div>
 
-          {/* STEP 4: REVIEW RESULTS (HONEST CONFIDENCE & METRICS) */}
+          {/* STEP 4: REVIEW RECOVERED FILES */}
           <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-200">
               <div>
-                <h2 className="text-base font-bold text-slate-900">
-                  Step 4: Review Recovered Artifacts
+                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <span>Step 4: Recovered Files</span>
+                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                    {recoveredFiles.length} Files Carved
+                  </span>
                 </h2>
-                <p className="text-xs text-slate-600">
-                  Inspect carved files, integrity validations, and honest confidence assessments.
+                <p className="text-xs text-slate-600 mt-0.5">
+                  Extracted documents, images, and forensic records from the evidence disk container.
                 </p>
               </div>
-              {evidence && (
-                <button
-                  type="button"
-                  onClick={() => setViewMode('EXPLORER')}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs self-start sm:self-auto"
-                >
-                  <Layers className="w-4 h-4" />
-                  <span>Launch Full Forensic Explorer</span>
-                </button>
-              )}
-            </div>
 
-            {/* 3 Honest Metric Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-slate-500">Fully Validated</span>
-                  <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
-                    High Confidence
-                  </span>
-                </div>
-                <div className="text-2xl font-bold text-slate-900 mt-2">
-                  {highConfidenceCount}
-                </div>
-                <div className="text-[11px] text-slate-500 mt-1">
-                  Header, payload, and file trailer intact with zero corruption.
-                </div>
-              </div>
-
-              <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-slate-500">Partial / Uncertain</span>
-                  <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
-                    Medium / Low
-                  </span>
-                </div>
-                <div className="text-2xl font-bold text-amber-700 mt-2">
-                  {partialCount}
-                </div>
-                <div className="text-[11px] text-slate-500 mt-1">
-                  Partial file streams carved from fragmented unallocated sectors.
-                </div>
-              </div>
-
-              <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-slate-500">Unrecoverable Sectors</span>
-                  <span className="text-xs font-semibold text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded">
-                    Overwritten
-                  </span>
-                </div>
-                <div className="text-2xl font-bold text-slate-600 mt-2">
-                  {recoveredFiles.length > 0 ? '14 Sectors' : '0 Sectors'}
-                </div>
-                <div className="text-[11px] text-slate-500 mt-1">
-                  Blocks overwritten or zeroed prior to evidence seizure.
-                </div>
+              <div className="flex items-center gap-2">
+                {evidence && (
+                  <a
+                    href={forensicApi.getReportDownloadUrl(evidence.evidenceId)}
+                    download
+                    className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-lg border border-slate-300 transition-colors flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-slate-600" />
+                    <span>Download report.json</span>
+                  </a>
+                )}
+                {evidence && (
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('EXPLORER')}
+                    className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>Forensic Explorer</span>
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* Artifacts Table */}
+            {/* Filter & Search Bar */}
             <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
-              <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50">
-                {/* Filter pills */}
-                <div className="flex items-center gap-2">
+              <div className="p-3.5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-50">
+                {/* Category Pills */}
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <button
                     onClick={() => setArtifactFilter('ALL')}
-                    className={`px-3 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${artifactFilter === 'ALL'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'
+                    className={`px-3 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${artifactFilter === 'ALL'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
                       }`}
                   >
                     All ({recoveredFiles.length})
                   </button>
                   <button
-                    onClick={() => setArtifactFilter('VALIDATED')}
-                    className={`px-3 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${artifactFilter === 'VALIDATED'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'
+                    onClick={() => setArtifactFilter('DOCS')}
+                    className={`px-3 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${artifactFilter === 'DOCS'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
                       }`}
                   >
-                    Validated ({highConfidenceCount})
+                    Documents ({docCount})
                   </button>
                   <button
-                    onClick={() => setArtifactFilter('PARTIAL')}
-                    className={`px-3 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${artifactFilter === 'PARTIAL'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'
+                    onClick={() => setArtifactFilter('IMAGES')}
+                    className={`px-3 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${artifactFilter === 'IMAGES'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
                       }`}
                   >
-                    Partial ({partialCount})
+                    Images ({imgCount})
+                  </button>
+                  <button
+                    onClick={() => setArtifactFilter('TEXT')}
+                    className={`px-3 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${artifactFilter === 'TEXT'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                      }`}
+                  >
+                    Emails & Logs ({txtCount})
+                  </button>
+                  <button
+                    onClick={() => setArtifactFilter('OTHER')}
+                    className={`px-3 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${artifactFilter === 'OTHER'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                      }`}
+                  >
+                    Other ({Math.max(0, recoveredFiles.length - docCount - imgCount - txtCount)})
                   </button>
                 </div>
 
-                {/* Step 5: Report Trigger Buttons */}
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleOpenReport}
-                    disabled={recoveredFiles.length === 0 || generatingReport}
-                    className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium flex items-center gap-1.5 shadow-sm transition-colors disabled:opacity-50 cursor-pointer"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                    <span>{generatingReport ? 'Generating Report...' : 'Generate Case Report'}</span>
-                  </button>
+                {/* Search Bar */}
+                <div className="relative min-w-[240px]">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search file name or path..."
+                    className="w-full bg-white text-xs pl-8 pr-3 py-1.5 rounded-md border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-slate-900"
+                  />
                 </div>
               </div>
 
               {loadingFiles ? (
-                <div className="p-10 text-center text-slate-500 text-sm">
-                  Loading recovered artifacts...
+                <div className="p-12 text-center text-slate-500 text-xs">
+                  <RefreshCw className="w-5 h-5 text-blue-600 animate-spin mx-auto mb-2" />
+                  <span>Loading recovered files...</span>
                 </div>
               ) : recoveredFiles.length === 0 ? (
-                <div className="p-10 text-center text-slate-500 text-sm">
-                  <Layers className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                  <p className="font-medium text-slate-700">No recovered artifacts yet</p>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Upload a disk image and run the Forensic Carving Pipeline above.
+                <div className="p-12 text-center text-slate-500 text-sm">
+                  <HardDrive className="w-9 h-9 text-slate-300 mx-auto mb-2" />
+                  <p className="font-semibold text-slate-700">No recovered files yet</p>
+                  <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                    Upload an evidence disk image and execute the Recovery Pipeline above to carve files.
                   </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto max-h-[520px] overflow-y-auto">
                   <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 uppercase text-[11px] font-semibold tracking-wider">
-                        <th className="py-3 px-4">Artifact ID</th>
-                        <th className="py-3 px-4">File Name</th>
-                        <th className="py-3 px-4">Type</th>
-                        <th className="py-3 px-4">Size</th>
-                        <th className="py-3 px-4">Recovery Status</th>
-                        <th className="py-3 px-4">Confidence</th>
-                        <th className="py-3 px-4">SHA-256 Hash</th>
-                        <th className="py-3 px-4 text-right">Inspect</th>
+                    <thead className="sticky top-0 bg-slate-50 z-10">
+                      <tr className="border-b border-slate-200 text-slate-600 uppercase text-[11px] font-semibold tracking-wider">
+                        <th className="py-2.5 px-4">File Name</th>
+                        <th className="py-2.5 px-4">Type</th>
+                        <th className="py-2.5 px-4">Size</th>
+                        <th className="py-2.5 px-4">SHA-256 Digest</th>
+                        <th className="py-2.5 px-4 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-slate-700">
-                      {filteredArtifacts.map((file) => (
+                      {filteredArtifacts.slice(0, 200).map((file) => (
                         <tr
                           key={file.recoveredFileId}
-                          onClick={() => setSelectedFileDetail(file)}
-                          className="hover:bg-slate-50 cursor-pointer transition-colors group"
+                          className="hover:bg-slate-50 transition-colors group"
                         >
-                          <td className="py-3 px-4 font-mono font-medium text-blue-600 whitespace-nowrap">
-                            {file.recoveredFileId}
-                          </td>
-                          <td className="py-3 px-4 font-medium text-slate-900 group-hover:text-blue-600 transition-colors">
-                            <div className="flex items-center gap-2">
-                              <FileCode className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                              <span className="truncate max-w-xs">{file.filename}</span>
+                          <td className="py-2.5 px-4">
+                            <div className="flex items-center gap-2.5">
+                              <FileCode className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                              <div className="overflow-hidden">
+                                <div className="font-medium text-slate-900 group-hover:text-blue-600 truncate max-w-sm">
+                                  {file.filename}
+                                </div>
+                                <div className="text-[10px] text-slate-400 font-mono truncate max-w-sm">
+                                  {file.originalPath || 'Unallocated Stream'}
+                                </div>
+                              </div>
                             </div>
                           </td>
-                          <td className="py-3 px-4 text-slate-500 whitespace-nowrap">
-                            {file.fileType}
+                          <td className="py-2.5 px-4 text-slate-500 uppercase font-mono text-[11px] whitespace-nowrap">
+                            {file.fileType || 'dat'}
                           </td>
-                          <td className="py-3 px-4 whitespace-nowrap text-slate-600">
+                          <td className="py-2.5 px-4 whitespace-nowrap text-slate-600 font-mono">
                             {file.size > 1024 * 1024
                               ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
                               : `${(file.size / 1024).toFixed(1)} KB`}
                           </td>
-                          <td className="py-3 px-4 whitespace-nowrap">
-                            <span className={`text-[11px] font-medium px-2 py-0.5 rounded border ${file.confidence === 'HIGH'
-                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                              : 'bg-amber-50 text-amber-800 border-amber-200'
-                              }`}>
-                              {file.statusLabel}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 whitespace-nowrap">
-                            <span className={`text-xs font-semibold ${file.confidence === 'HIGH'
-                              ? 'text-emerald-700'
-                              : file.confidence === 'MEDIUM'
-                                ? 'text-amber-700'
-                                : 'text-rose-700'
-                              }`}>
-                              {file.confidence}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 whitespace-nowrap">
+                          <td className="py-2.5 px-4 whitespace-nowrap">
                             <HashDisplay hash={file.sha256} length={8} />
                           </td>
-                          <td className="py-3 px-4 text-right whitespace-nowrap">
-                            <button className="text-xs text-blue-600 hover:text-blue-800 font-medium hover:underline">
-                              Inspect
-                            </button>
+                          <td className="py-2.5 px-4 text-right whitespace-nowrap">
+                            <div className="inline-flex items-center gap-1.5">
+                              <button
+                                onClick={() => handleDownloadArtifact(file)}
+                                title="Download File"
+                                className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors cursor-pointer"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => setSelectedFileDetail(file)}
+                                title="Inspect Metadata"
+                                className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors cursor-pointer"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
+                  {filteredArtifacts.length > 200 && (
+                    <div className="p-3 bg-slate-50 border-t border-slate-200 text-center text-xs text-slate-500">
+                      Showing first 200 of {filteredArtifacts.length} files. Use search or Forensic Explorer to browse full hierarchy.
+                    </div>
+                  )}
                 </div>
               )}
+            </div>
+
+            {/* AI Analyst Prompt Card */}
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900">
+                    Want AI to investigate this disk image?
+                  </h4>
+                  <p className="text-[11px] text-slate-600 mt-0.5">
+                    Query the AI Forensic Analyst to locate specific files, examine deleted emails, inspect MFT logs, or find hidden data.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate(`/analyst?caseId=${selectedCaseId}`)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-lg shadow-sm transition-colors cursor-pointer shrink-0 flex items-center gap-1.5"
+              >
+                <span>Open Forensic Analyst</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
         </>

@@ -1,7 +1,9 @@
 import fs from 'fs';
 import path from 'path';
+import mongoose from 'mongoose';
 import Evidence from '../models/Evidence.js';
 import Case from '../models/Case.js';
+import Job from '../models/Job.js';
 import RecoveredFile from '../models/RecoveredFile.js';
 import jobService from './job.service.js';
 import pythonClient from './python/pythonClient.js';
@@ -228,7 +230,119 @@ const recoveryService = {
   getRecoveredFiles: async (evidenceId) => {
     const evidence = await findEvidenceByParam(Evidence, evidenceId);
     if (!evidence) throw new Error('Evidence not found');
-    return RecoveredFile.find({ evidenceId: evidence._id }).sort({ createdAt: -1 });
+
+    const queryOr = [{ evidenceId: evidence._id }];
+    if (evidence.evidenceId) queryOr.push({ evidenceId: evidence.evidenceId });
+    if (evidence.caseId) queryOr.push({ caseId: evidence.caseId });
+
+    let files = await RecoveredFile.find({ $or: queryOr }).sort({ createdAt: -1 });
+    if (files && files.length > 0) {
+      return files;
+    }
+
+    // If MongoDB has no files yet, check for report.json on disk and auto-sync
+    try {
+      const recBase = storageService.getRecoveredStoragePath();
+      let reportPath = null;
+
+      // Check evidence's case
+      if (evidence.caseId) {
+        let caseIdStr = String(evidence.caseId);
+        const caseRecord = await Case.findById(evidence.caseId);
+        if (caseRecord && caseRecord.caseId) caseIdStr = caseRecord.caseId;
+        const p1 = path.join(recBase, caseIdStr, 'report.json');
+        if (fs.existsSync(p1)) reportPath = p1;
+      }
+
+      if (!reportPath && fs.existsSync(recBase)) {
+        const subdirs = fs.readdirSync(recBase, { withFileTypes: true });
+        for (const sub of subdirs) {
+          if (sub.isDirectory()) {
+            const p = path.join(recBase, sub.name, 'report.json');
+            if (fs.existsSync(p)) {
+              reportPath = p;
+              break;
+            }
+          }
+        }
+      }
+
+      if (reportPath && fs.existsSync(reportPath)) {
+        logger.info(`Auto-syncing recovered artifacts from ${reportPath} for evidence ${evidence.evidenceId}...`);
+        const reportData = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+        const artifacts = reportData.artifacts || [];
+
+        let job = await Job.findOne({ evidenceId: evidence._id }).sort({ createdAt: -1 });
+        if (!job && evidence.caseId) {
+          try {
+            job = await Job.create({
+              jobId: `JOB-${Math.floor(10000 + Math.random() * 90000)}`,
+              caseId: evidence.caseId,
+              evidenceId: evidence._id,
+              type: 'RECOVERY',
+              status: 'COMPLETED',
+              progress: 100,
+              stage: 'completed'
+            });
+          } catch (jobErr) {
+            logger.warn(`Could not create job for recovery auto-sync: ${jobErr.message}`);
+          }
+        }
+
+        const docsToInsert = [];
+        for (const a of artifacts) {
+          const originalName = a.metadata?.original_name || (a.output_path ? path.basename(a.output_path) : 'artifact.dat');
+          const originalPath = a.metadata?.original_path || a.output_path || '';
+          const confidence = typeof a.confidence_score === 'number' ? Math.round(a.confidence_score * 100) : 100;
+          docsToInsert.push({
+            recoveredFileId: generateRecoveredFileId(),
+            jobId: job?._id,
+            evidenceId: evidence._id,
+            caseId: evidence.caseId,
+            filename: originalName,
+            originalPath: originalPath,
+            recoveredPath: a.output_path || '',
+            size: a.size || 0,
+            hash: a.sha256 || a.md5 || '',
+            fileType: a.format || path.extname(originalName).replace('.', '') || 'unknown',
+            confidence: confidence,
+            recoveryStatus: a.is_complete ? 'SUCCESS' : 'PARTIAL',
+            metadata: {
+              artifactId: a.artifact_id,
+              category: a.category,
+              mimeType: a.mime_type,
+              offset: a.offset,
+              recoveryMethod: a.recovery_method || 'filesystem',
+              confidence: confidence,
+              isFragmented: a.is_fragmented,
+              validationDetails: a.validation_details,
+              originalName: originalName,
+              originalPath: originalPath,
+              rawMetadata: a.metadata || {}
+            }
+          });
+        }
+
+        if (docsToInsert.length > 0) {
+          try {
+            await RecoveredFile.insertMany(docsToInsert, { ordered: false });
+            logger.info(`Auto-synced ${docsToInsert.length} recovered files into MongoDB.`);
+          } catch (insErr) {
+            logger.warn(`Bulk insert recovered files notice: ${insErr.message}`);
+          }
+          const freshlyFound = await RecoveredFile.find({ evidenceId: evidence._id }).sort({ createdAt: -1 });
+          if (freshlyFound && freshlyFound.length > 0) {
+            return freshlyFound;
+          }
+          // Fallback return memory-mapped docs if DB read lags
+          return docsToInsert;
+        }
+      }
+    } catch (syncErr) {
+      logger.warn(`Could not auto-sync report.json files: ${syncErr.message}`);
+    }
+
+    return [];
   }
 };
 

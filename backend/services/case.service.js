@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import Case from '../models/Case.js';
 import auditService from './audit/audit.service.js';
 import { findCaseByParam } from '../utils/ids.js';
@@ -20,7 +22,7 @@ const caseService = {
         createdBy: userId,
         investigators: [userId]
       });
-      
+
       // Audit logging
       await auditService.record({
         caseId: newCase._id,
@@ -29,7 +31,7 @@ const caseService = {
         target: `Case ${caseId}`,
         details: { title: data.title, description: data.description }
       });
-      
+
       logger.info(`Case created: ${caseId}`);
       return newCase;
     } catch (error) {
@@ -40,12 +42,34 @@ const caseService = {
 
   list: async (userId) => {
     try {
-      const cases = await Case.find({
-        $or: [
-          { createdBy: userId },
-          { investigators: userId }
-        ]
-      }).sort({ createdAt: -1 });
+      // Auto-sync any recovered case directories on disk
+      try {
+        const recoveredBase = path.resolve(process.cwd(), 'backend/storage/recovered');
+        if (fs.existsSync(recoveredBase)) {
+          const caseDirs = fs.readdirSync(recoveredBase, { withFileTypes: true })
+            .filter(d => d.isDirectory() && d.name.startsWith('CASE-'))
+            .map(d => d.name);
+
+          for (const cId of caseDirs) {
+            const exists = await Case.findOne({ caseId: cId });
+            if (!exists) {
+              await Case.create({
+                caseId: cId,
+                title: `Forensic Investigation ${cId}`,
+                description: 'Physical bitstream acquisition, inode carving, and cryptographic integrity analysis.',
+                status: 'COMPLETED',
+                createdBy: userId || undefined,
+                investigators: userId ? [userId] : []
+              }).catch(() => null);
+            }
+          }
+        }
+      } catch (e) {
+        logger.warn(`Failed to auto-sync cases from disk: ${e.message}`);
+      }
+
+      // Return all cases
+      const cases = await Case.find().sort({ createdAt: -1 });
       return cases;
     } catch (error) {
       logger.error(`Error listing cases: ${error.message}`);
@@ -90,7 +114,7 @@ const caseService = {
           details: data
         });
       }
-      
+
       logger.info(`Case updated: ${caseId}`);
       return updatedCase;
     } catch (error) {

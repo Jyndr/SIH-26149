@@ -15,6 +15,7 @@ const loadReportCase = async (req, res, next) => {
 };
 
 router.use(auth);
+router.get('/reports', reportController.listAll);
 router.post('/cases/:caseId/reports', authorizeCaseAccess, reportController.create);
 router.get('/cases/:caseId/reports', authorizeCaseAccess, reportController.listByCase);
 router.get('/reports/:reportId', loadReportCase, reportController.getById);

@@ -25,6 +25,16 @@ function tokenize(text) {
     .filter((t) => t.length > 1);
 }
 
+// Priority list of verified Google Gemini Free-Tier Models
+export const GEMINI_FREE_MODELS = [
+  'gemini-flash-lite-latest',
+  'gemini-3.5-flash-lite',
+  'gemini-flash-latest',
+  'gemini-3.6-flash',
+  'gemini-3.7-flash',
+  'gemini-3.8-flash'
+];
+
 /**
  * Resolves AI provider configuration from environment
  */
@@ -47,7 +57,8 @@ function getAIConfig() {
     }
   }
 
-  let defaultModel = 'gemini-flash-lite-latest';
+  // Always default to official free tier model for Gemini
+  let defaultModel = GEMINI_FREE_MODELS[0];
   if (provider === 'openai') {
     defaultModel = 'gpt-4o-mini';
   } else if (provider === 'ollama') {
@@ -517,44 +528,67 @@ Provide your verified forensic findings in strict JSON.`;
 
   const startTime = Date.now();
   let parsedResponse = null;
+  let activeModelUsed = config.model;
 
   try {
     if (config.provider === 'gemini') {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`;
-      const payload = JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-        generationConfig: {
-          temperature: 0.1,
-          responseMimeType: 'application/json'
+      // Build candidate list prioritizing configured model then all free-tier models
+      const candidateModels = Array.from(new Set([config.model, ...GEMINI_FREE_MODELS].filter(Boolean)));
+      let lastGeminiError = null;
+
+      for (const targetModel of candidateModels) {
+        try {
+          logger.info(`[AI] Querying Gemini model: ${targetModel}`);
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${config.apiKey}`;
+          const payload = JSON.stringify({
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+            generationConfig: {
+              temperature: 0.1,
+              responseMimeType: 'application/json'
+            }
+          });
+
+          let response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payload
+          });
+
+          if (response.status === 429 || response.status === 503) {
+            logger.warn(`[AI] Gemini model ${targetModel} returned status ${response.status}. Attempting brief backoff retry...`);
+            await new Promise((r) => setTimeout(r, 2000));
+            response = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: payload
+            });
+          }
+
+          if (!response.ok) {
+            const errBody = await response.text();
+            lastGeminiError = new Error(`Gemini API error for model ${targetModel} (${response.status}): ${errBody}`);
+            logger.warn(`[AI] Gemini model ${targetModel} failed: ${lastGeminiError.message}. Trying next free model fallback...`);
+            continue;
+          }
+
+          const data = await response.json();
+          const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (rawText) {
+            const cleaned = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+            parsedResponse = JSON.parse(cleaned);
+            activeModelUsed = targetModel;
+            logger.info(`[AI] Successfully received response from Gemini free model: ${targetModel}`);
+            break;
+          }
+        } catch (mErr) {
+          lastGeminiError = mErr;
+          logger.warn(`[AI] Error attempting Gemini model ${targetModel}: ${mErr.message}. Trying next free model fallback...`);
         }
-      });
-
-      let response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: payload
-      });
-
-      if (response.status === 429 || response.status === 503) {
-        logger.warn(`[AI] Gemini API rate limited (${response.status}), retrying in 3.5 seconds...`);
-        await new Promise((r) => setTimeout(r, 3500));
-        response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: payload
-        });
       }
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Gemini API error (${response.status}): ${errorText}`);
-      }
-
-      const data = await response.json();
-      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (rawText) {
-        parsedResponse = JSON.parse(rawText);
+      if (!parsedResponse && lastGeminiError) {
+        throw lastGeminiError;
       }
     } else {
       const baseUrl = config.baseUrl || 'https://api.openai.com/v1';
@@ -587,12 +621,13 @@ Provide your verified forensic findings in strict JSON.`;
       const data = await response.json();
       const rawText = data.choices?.[0]?.message?.content;
       if (rawText) {
-        parsedResponse = JSON.parse(rawText);
+        const cleaned = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+        parsedResponse = JSON.parse(cleaned);
       }
     }
 
     const elapsedMs = Date.now() - startTime;
-    logger.info(`[AI] Model response received in ${elapsedMs}ms`);
+    logger.info(`[AI] Model (${activeModelUsed}) response received in ${elapsedMs}ms`);
 
     if (parsedResponse && parsedResponse.answer) {
       return {
@@ -605,6 +640,7 @@ Provide your verified forensic findings in strict JSON.`;
         record: parsedResponse.record || 'N/A',
         sha256: parsedResponse.sha256 || 'N/A',
         confidence: parsedResponse.confidence || 'High',
+        model: activeModelUsed,
         sourceArtifactId: retrieved.sourceArtifactId,
         sourceArtifact: retrieved.sourceArtifact,
         matches: retrieved.context.matchedFiles.map((mf) => ({
@@ -655,9 +691,15 @@ const forensicAnalystService = {
       configured: Boolean(config.apiKey || config.baseUrl),
       provider: config.provider,
       model: config.model,
+      freeModels: config.provider === 'gemini' ? GEMINI_FREE_MODELS : [],
       hasCustomBaseUrl: Boolean(config.baseUrl)
     };
-  }
+  },
+
+  /**
+   * Returns list of supported Gemini Free Models
+   */
+  getFreeModels: () => GEMINI_FREE_MODELS
 };
 
 export default forensicAnalystService;

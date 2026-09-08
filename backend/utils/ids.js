@@ -20,6 +20,18 @@ export const findEvidenceByParam = async (Evidence, evidenceIdParam) => {
       }
       const byEvId = await Evidence.findOne({ evidenceId: evidenceIdParam });
       if (byEvId) return byEvId;
+
+      // Also check if evidenceIdParam is a case ID
+      const Case = mongoose.models.Case;
+      if (Case) {
+        const foundCase = await Case.findOne({ caseId: evidenceIdParam });
+        if (foundCase) {
+          const evByCase = await Evidence.findOne({
+            $or: [{ caseId: foundCase._id }, { caseId: foundCase.caseId }, { caseId: evidenceIdParam }]
+          }).sort({ createdAt: -1 });
+          if (evByCase) return evByCase;
+        }
+      }
     } catch (e) {
       // Fall through to fallback
     }

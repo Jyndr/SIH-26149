@@ -8,6 +8,7 @@ import { RecoveryWorkflowPage } from './pages/RecoveryWorkflowPage';
 import { SanitizationPage } from './pages/SanitizationPage';
 import { AuditPage } from './pages/AuditPage';
 import { ReportsPage } from './pages/ReportsPage';
+import { AIAnalystPage } from './pages/AIAnalystPage';
 import { AppLayout } from './components/layout/AppLayout';
 
 export const App = () => {
@@ -23,9 +24,11 @@ export const App = () => {
         <Route path="/cases" element={<CasesPage />} />
         <Route path="/cases/:caseId" element={<CaseDetailsPage />} />
         <Route path="/cases/:caseId/recovery" element={<RecoveryWorkflowPage />} />
-        <Route path="/cases/:caseId/forensic-analyst" element={<RecoveryWorkflowPage />} />
+        <Route path="/cases/:caseId/analyst" element={<AIAnalystPage />} />
+        <Route path="/cases/:caseId/forensic-analyst" element={<AIAnalystPage />} />
         <Route path="/recovery" element={<RecoveryWorkflowPage />} />
-        <Route path="/forensic-analyst" element={<RecoveryWorkflowPage />} />
+        <Route path="/analyst" element={<AIAnalystPage />} />
+        <Route path="/forensic-analyst" element={<AIAnalystPage />} />
         <Route path="/cases/:caseId/sanitization" element={<SanitizationPage />} />
         <Route path="/sanitization" element={<SanitizationPage />} />
         <Route path="/audit" element={<AuditPage />} />
