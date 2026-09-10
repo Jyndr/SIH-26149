@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import mongoose from 'mongoose';
 import Evidence from '../models/Evidence.js';
 import Case from '../models/Case.js';
@@ -15,6 +16,17 @@ import logger from '../utils/logger.js';
 const generateRecoveredFileId = () => {
   const random = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
   return `REC-${random}`;
+};
+
+const generateStableRecoveredFileId = (evidence, artifact) => {
+  const stableSource = [
+    evidence.evidenceId || evidence._id,
+    artifact.artifact_id,
+    artifact.output_path,
+    artifact.offset,
+    artifact.sha256 || artifact.md5
+  ].filter(Boolean).join('|');
+  return `REC-${crypto.createHash('sha1').update(stableSource).digest('hex').slice(0, 16).toUpperCase()}`;
 };
 
 const evidenceAbsolutePath = (evidence) => {
@@ -157,7 +169,7 @@ const recoveryService = {
       await RecoveredFile.deleteMany({ evidenceId: evidence._id });
 
       for (const artifact of artifacts) {
-        const recoveredFileId = generateRecoveredFileId();
+        const recoveredFileId = generateStableRecoveredFileId(evidence, artifact);
         const originalName = artifact.metadata?.original_name || path.basename(artifact.output_path);
         const originalPath = artifact.metadata?.original_path || artifact.output_path;
         const confidence = typeof artifact.confidence_score === 'number'
@@ -231,11 +243,13 @@ const recoveryService = {
     const evidence = await findEvidenceByParam(Evidence, evidenceId);
     if (!evidence) throw new Error('Evidence not found');
 
-    const queryOr = [{ evidenceId: evidence._id }];
-    if (evidence.evidenceId) queryOr.push({ evidenceId: evidence.evidenceId });
-    if (evidence.caseId) queryOr.push({ caseId: evidence.caseId });
+    const queryOr = [];
+    if (mongoose.Types.ObjectId.isValid(evidence._id)) queryOr.push({ evidenceId: evidence._id });
+    if (mongoose.Types.ObjectId.isValid(evidence.caseId)) queryOr.push({ caseId: evidence.caseId });
 
-    let files = await RecoveredFile.find({ $or: queryOr }).sort({ createdAt: -1 });
+    let files = queryOr.length > 0
+      ? await RecoveredFile.find({ $or: queryOr }).sort({ createdAt: -1 })
+      : [];
     if (files && files.length > 0) {
       return files;
     }
@@ -295,7 +309,7 @@ const recoveryService = {
           const originalPath = a.metadata?.original_path || a.output_path || '';
           const confidence = typeof a.confidence_score === 'number' ? Math.round(a.confidence_score * 100) : 100;
           docsToInsert.push({
-            recoveredFileId: generateRecoveredFileId(),
+            recoveredFileId: generateStableRecoveredFileId(evidence, a),
             jobId: job?._id,
             evidenceId: evidence._id,
             caseId: evidence.caseId,

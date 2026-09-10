@@ -3,19 +3,15 @@ import logger from '../../utils/logger.js';
 const verifyService = {
   async verifyTarget(target, options = {}) {
     try {
-      // Placeholder for actual verification implementation
-      // The forensic-engine does not currently implement verification
-      // This will be a mock implementation for now
-      
-      logger.info(`Verification requested for ${target}`);
-      
-      // Simulate verification result
+      void options;
+      logger.info(`Verification not executed for dry-run target ${target}`);
       return {
         jobId: `verify-${Date.now()}`,
         target,
-        verified: true,
-        hash: 'mock-hash-123456',
-        algorithm: 'SHA-256'
+        executed: false,
+        status: 'NOT_EXECUTED',
+        verificationStatus: 'NOT_EXECUTED',
+        reason: 'No sanitization was executed in DRY_RUN mode.'
       };
     } catch (error) {
       logger.error(`Error verifying target: ${error.message}`);

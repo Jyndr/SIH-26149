@@ -1,9 +1,10 @@
 import SanitizationJob from '../models/SanitizationJob.js';
 import jobService from './job.service.js';
-import sanitizeService from './python/sanitize.js';
+import nativeAgent from './nativeAgent.service.js';
 import verifyService from './python/verify.js';
 import auditService from './audit/audit.service.js';
 import logger from '../utils/logger.js';
+import Case from '../models/Case.js';
 
 const generateSanitizationId = () => {
   const random = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
@@ -11,7 +12,7 @@ const generateSanitizationId = () => {
 };
 
 const sanitizationService = {
-  startSanitize: async ({ target, targetType, method, caseId, userId }) => {
+  startSanitize: async ({ target, targetType, targetReference, method, caseId, userId }) => {
     const job = await jobService.create({
       caseId,
       type: 'SANITIZATION'
@@ -23,6 +24,7 @@ const sanitizationService = {
       caseId,
       target,
       targetType,
+      targetReference,
       method,
       status: 'QUEUED',
       createdBy: userId
@@ -40,27 +42,47 @@ const sanitizationService = {
   runSanitize: async (jobId, sanitizationId, userId) => {
     const sanitizationJob = await SanitizationJob.findOne({ sanitizationId });
     try {
-      await jobService.updateStatus(jobId, 'RUNNING', { startedAt: new Date(), progress: 10, stage: 'wiping' });
+      await jobService.updateStatus(jobId, 'RUNNING', { startedAt: new Date(), progress: 10, stage: 'dry-run-planning' });
       sanitizationJob.status = 'RUNNING';
       await sanitizationJob.save();
 
-      const result = await sanitizeService.sanitizeTarget(sanitizationJob.target, sanitizationJob.method);
+      const caseDoc = await Case.findById(sanitizationJob.caseId);
+      const result = await nativeAgent.startSanitization({
+        deviceId: sanitizationJob.target,
+        caseId: caseDoc?.caseId || String(sanitizationJob.caseId),
+        method: sanitizationJob.method,
+        targetScope: sanitizationJob.targetType === 'FILE' ? 'FILE' : 'DEVICE',
+        artifactId: sanitizationJob.targetReference || undefined
+      });
 
-      sanitizationJob.status = 'COMPLETED';
-      sanitizationJob.verification = result.verification;
+      sanitizationJob.status = 'DRY_RUN';
+      sanitizationJob.mode = 'DRY_RUN';
+      sanitizationJob.executed = false;
+      sanitizationJob.supported = false;
+      sanitizationJob.reason = result.reason;
+      sanitizationJob.requirements = result.requirements || [];
+      sanitizationJob.counteredRecoveryPaths = result.counteredRecoveryPaths || [];
+      sanitizationJob.verificationStatus = 'NOT_EXECUTED';
+      sanitizationJob.verification = {};
       await sanitizationJob.save();
 
       await auditService.record({
         caseId: sanitizationJob.caseId,
         actor: userId,
-        operation: 'SANITIZE',
+        operation: 'SANITIZATION',
         target: sanitizationJob.target,
-        details: { method: sanitizationJob.method, verification: result.verification }
+        details: {
+          method: sanitizationJob.method, mode: 'DRY_RUN', executed: false,
+          supported: false, verificationStatus: 'NOT_EXECUTED', status: 'DRY_RUN',
+          targetScope: result.targetScope, artifactId: result.artifactId,
+          requirements: result.requirements, counteredRecoveryPaths: result.counteredRecoveryPaths,
+          reason: result.reason
+        }
       });
 
       await jobService.updateStatus(jobId, 'COMPLETED', {
         progress: 100,
-        stage: 'completed',
+        stage: 'dry-run-complete',
         result
       });
     } catch (error) {
@@ -78,6 +100,10 @@ const sanitizationService = {
     await jobService.updateStatus(job.jobId, 'RUNNING', { startedAt: new Date() });
     const result = await verifyService.verifyTarget(target);
     await jobService.updateStatus(job.jobId, 'COMPLETED', { progress: 100, result });
+    await auditService.record({
+      caseId, actor: userId, operation: 'VERIFICATION', target,
+      details: { executed: false, verificationStatus: 'NOT_EXECUTED', mode: 'DRY_RUN', status: 'NOT_EXECUTED' }
+    });
     return { job, result };
   },
 

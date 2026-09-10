@@ -28,20 +28,28 @@ const sanitizationJobSchema = new mongoose.Schema({
     enum: ['FILE', 'FOLDER', 'DRIVE'],
     required: true
   },
+  targetReference: { type: String },
   method: {
     type: String,
-    enum: ['ZERO_FILL', 'RANDOM', 'CRYPTO_ERASE'],
-    default: 'ZERO_FILL'
+    enum: ['CLEAR', 'PURGE', 'CRYPTOGRAPHIC_ERASE', 'DESTROY', 'ZERO_FILL', 'RANDOM', 'CRYPTO_ERASE'],
+    default: 'CLEAR'
   },
   status: {
     type: String,
-    enum: ['QUEUED', 'RUNNING', 'COMPLETED', 'FAILED'],
+    enum: ['QUEUED', 'RUNNING', 'DRY_RUN', 'FAILED'],
     default: 'QUEUED'
   },
+  mode: { type: String, enum: ['DRY_RUN'], default: 'DRY_RUN' },
+  executed: { type: Boolean, default: false },
+  supported: { type: Boolean, default: false },
+  reason: { type: String, default: 'Real sanitization provider not enabled.' },
+  requirements: { type: [String], default: [] },
+  counteredRecoveryPaths: { type: [String], default: [] },
+  verificationStatus: { type: String, enum: ['NOT_EXECUTED'], default: 'NOT_EXECUTED' },
   verification: {
     passed: {
       type: Boolean,
-      default: false
+      default: undefined
     },
     sectors: {
       type: Number

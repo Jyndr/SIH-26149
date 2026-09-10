@@ -15,6 +15,41 @@ const generateEvidenceId = () => {
 };
 
 const evidenceService = {
+  registerAcquiredImage: async ({ sourcePath, caseId, userId, acquisition }) => {
+    const evidenceId = generateEvidenceId();
+    const originalFilename = path.basename(sourcePath);
+    const storedFilename = storageService.generateStoredFilename(evidenceId, originalFilename);
+    const fullPath = path.join(storageService.getEvidenceStoragePath(), storedFilename);
+    await fs.promises.copyFile(sourcePath, fullPath, fs.constants.COPYFILE_EXCL);
+    try {
+      const sha256 = await hashService.computeSHA256FromFile(fullPath);
+      if (acquisition.sha256 && sha256 !== acquisition.sha256) {
+        throw new Error('Acquired image hash does not match native-agent metadata');
+      }
+      const stats = await fs.promises.stat(fullPath);
+      const evidence = await Evidence.create({
+        evidenceId, caseId, originalFilename, storedFilename, size: stats.size,
+        mimeType: 'application/octet-stream', sha256, storagePath: path.join('evidence', storedFilename),
+        acquisition: {
+          acquisitionId: acquisition.acquisitionId, sourceDevice: acquisition.sourceDevice,
+          imageFormat: acquisition.imageFormat, startedAt: acquisition.startedAt,
+          completedAt: acquisition.completedAt, readOnly: true
+        },
+        createdBy: userId
+      });
+      await auditService.record({
+        caseId: evidence.caseId, evidenceId: evidence._id, actor: userId,
+        operation: 'EVIDENCE_ACQUIRED', target: `Evidence ${evidenceId}`,
+        details: { acquisitionId: acquisition.acquisitionId, sourceDevice: acquisition.sourceDevice,
+          imageFormat: acquisition.imageFormat, size: stats.size, sha256, mode: 'READ_ONLY' }
+      });
+      return evidence;
+    } catch (error) {
+      await fs.promises.unlink(fullPath).catch(() => {});
+      throw error;
+    }
+  },
+
   upload: async (file, caseId, userId) => {
     try {
       const evidenceId = generateEvidenceId();
@@ -80,12 +115,14 @@ const evidenceService = {
       } else {
         foundCase = await Case.findById(caseIdParam);
       }
-      const queryOr = [{ caseId: targetCaseId }];
+      const queryOr = [];
+      if (mongoose.Types.ObjectId.isValid(targetCaseId)) {
+        queryOr.push({ caseId: targetCaseId });
+      }
       if (foundCase) {
         queryOr.push({ caseId: foundCase._id });
-        if (foundCase.caseId) queryOr.push({ caseId: foundCase.caseId });
       }
-      if (caseIdParam) queryOr.push({ caseId: caseIdParam });
+      if (queryOr.length === 0) return [];
       const evidence = await Evidence.find({ $or: queryOr }).sort({ createdAt: -1 });
       return evidence;
     } catch (error) {

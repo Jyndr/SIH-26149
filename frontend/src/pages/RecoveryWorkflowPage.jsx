@@ -25,7 +25,7 @@ import {
   Search,
   ExternalLink
 } from 'lucide-react';
-import { casesApi, evidenceApi, recoveryApi, forensicApi, jobsApi, reportsApi } from '../services/api';
+import { acquisitionApi, casesApi, evidenceApi, nativeAgentApi, recoveryApi, forensicApi, jobsApi, reportsApi } from '../services/api';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { HashDisplay } from '../components/common/HashDisplay';
 import { Modal } from '../components/common/Modal';
@@ -49,6 +49,10 @@ export const RecoveryWorkflowPage = () => {
   const [evidence, setEvidence] = useState(null);
   const [uploadError, setUploadError] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [devices, setDevices] = useState([]);
+  const [deviceError, setDeviceError] = useState('');
+  const [acquiringDeviceId, setAcquiringDeviceId] = useState('');
+  const [acquisitionStatus, setAcquisitionStatus] = useState(null);
 
   // Step 3: Verification & Analysis state
   const [verifying, setVerifying] = useState(false);
@@ -81,7 +85,46 @@ export const RecoveryWorkflowPage = () => {
   // Fetch available cases if not already in URL
   useEffect(() => {
     fetchAvailableCases();
+    refreshDevices();
   }, []);
+
+  const refreshDevices = async () => {
+    setDeviceError('');
+    try {
+      const response = await nativeAgentApi.listDevices();
+      setDevices(response.data || []);
+    } catch (error) {
+      setDevices([]);
+      setDeviceError(`Native Agent unavailable: ${error.response?.data?.error?.message || error.message}`);
+    }
+  };
+
+  const acquireDevice = async (deviceId) => {
+    if (!selectedCaseId) return;
+    setAcquiringDeviceId(deviceId);
+    setUploadError(null);
+    try {
+      const started = await acquisitionApi.start(selectedCaseId, { deviceId, imageFormat: 'RAW' });
+      const jobId = started.data.jobId;
+      setAcquisitionStatus(started.data);
+      for (let attempt = 0; attempt < 1800; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        const response = await acquisitionApi.getJob(jobId);
+        const job = response.data;
+        setAcquisitionStatus(job);
+        if (job.status === 'FAILED') throw new Error(job.error || 'Acquisition failed');
+        if (job.status === 'COMPLETED' && job.evidence) {
+          setEvidence(job.evidence);
+          setAcquiringDeviceId('');
+          return;
+        }
+      }
+      throw new Error('Acquisition is still running; check the case audit before retrying.');
+    } catch (error) {
+      setUploadError(error.response?.data?.error?.message || error.message);
+      setAcquiringDeviceId('');
+    }
+  };
 
   const fetchAvailableCases = async () => {
     try {
@@ -555,6 +598,26 @@ export const RecoveryWorkflowPage = () => {
               </div>
             </div>
           )}
+
+          {/* Connected storage is acquired by the localhost agent; raw paths never reach this UI. */}
+          <section className="bg-white border border-slate-200 rounded-lg p-5 shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div><h2 className="text-sm font-semibold text-slate-900 flex items-center gap-2"><HardDrive className="w-4 h-4 text-blue-600" /> Connected Storage</h2><p className="text-xs text-slate-500 mt-1">Acquire a read-only RAW image through the Cyphora Native Agent.</p></div>
+              <button type="button" onClick={refreshDevices} title="Refresh devices" className="p-2 border border-slate-200 rounded-md hover:bg-slate-50"><RefreshCw className="w-4 h-4" /></button>
+            </div>
+            {deviceError && <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md p-3">{deviceError}</div>}
+            {!deviceError && devices.length === 0 && <p className="text-sm text-slate-500">No storage devices detected.</p>}
+            <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
+              {devices.map((device) => <div key={device.id} className="border border-slate-200 rounded-md p-4 space-y-3">
+                <div><div className="font-semibold text-sm text-slate-900">{device.name}</div><div className="text-xs text-slate-500">{[device.vendor, device.model].filter(Boolean).join(' ') || 'Storage device'}</div></div>
+                <div className="grid grid-cols-2 gap-2 text-xs"><span>{(device.size / (1024 ** 3)).toFixed(1)} GB</span><span>{device.filesystem || 'Unknown FS'}</span><span>{device.bus || 'Unknown bus'}</span><span>{device.mounted ? 'Mounted' : 'Unmounted'}</span></div>
+                <button type="button" onClick={() => acquireDevice(device.id)} disabled={!selectedCaseId || Boolean(acquiringDeviceId) || !(device.removable || device.bus === 'USB')} className="w-full px-3 py-2 bg-blue-600 text-white text-xs font-medium rounded-md disabled:opacity-40 flex justify-center items-center gap-2">
+                  {acquiringDeviceId === device.id && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}{acquiringDeviceId === device.id ? 'Acquiring...' : 'Acquire Evidence'}
+                </button>
+              </div>)}
+            </div>
+            {acquisitionStatus && <div className="text-xs bg-slate-50 border border-slate-200 rounded-md p-3 flex justify-between"><span>Status: <strong>{acquisitionStatus.status}</strong></span><span>{Number(acquisitionStatus.bytesRead || 0).toLocaleString()} bytes read</span></div>}
+          </section>
 
           {/* STEP 2 & 3: UPLOAD & VERIFY INTEGRITY */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

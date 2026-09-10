@@ -27,7 +27,7 @@ export const findEvidenceByParam = async (Evidence, evidenceIdParam) => {
         const foundCase = await Case.findOne({ caseId: evidenceIdParam });
         if (foundCase) {
           const evByCase = await Evidence.findOne({
-            $or: [{ caseId: foundCase._id }, { caseId: foundCase.caseId }, { caseId: evidenceIdParam }]
+            caseId: foundCase._id
           }).sort({ createdAt: -1 });
           if (evByCase) return evByCase;
         }

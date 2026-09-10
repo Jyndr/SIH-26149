@@ -34,6 +34,9 @@ const evidenceSchema = new mongoose.Schema({
   filesystem: {
     type: mongoose.Schema.Types.Mixed
   },
+  acquisition: {
+    type: mongoose.Schema.Types.Mixed
+  },
   analysisStatus: {
     type: String,
     enum: ['PENDING', 'ANALYZING', 'ANALYZED', 'FAILED'],

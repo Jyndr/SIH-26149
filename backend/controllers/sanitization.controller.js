@@ -15,6 +15,7 @@ const sanitizationController = {
       const result = await sanitizationService.startSanitize({
         target: validatedData.target,
         targetType: validatedData.targetType,
+        targetReference: validatedData.targetReference,
         method: validatedData.method,
         caseId: req.case._id,
         userId: req.user.id
@@ -25,7 +26,10 @@ const sanitizationController = {
         data: {
           jobId: result.job.jobId,
           sanitizationId: result.sanitizationJob.sanitizationId,
-          status: result.job.status
+          status: result.job.status,
+          mode: 'DRY_RUN',
+          executed: false,
+          verificationStatus: 'NOT_EXECUTED'
         }
       });
     } catch (error) {

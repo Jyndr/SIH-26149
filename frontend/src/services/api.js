@@ -221,6 +221,7 @@ export const evidenceApi = {
 };
 
 export const recoveryApi = {
+  // Recovery continues to operate on normal Evidence records, including images registered after native acquisition.
   startRecovery: async (evidenceId) => {
     const res = await apiClient.post(`/evidence/${evidenceId}/recover`);
     return res.data;
@@ -241,6 +242,23 @@ export const recoveryApi = {
     const query = token ? `?token=${encodeURIComponent(token)}` : '';
     return `${API_BASE_URL}/recovered-files/${recoveredFileId}/download${query}`;
   }
+};
+
+export const nativeAgentApi = {
+  health: async () => (await apiClient.get('/native-agent/health')).data,
+  listDevices: async () => (await apiClient.get('/devices')).data,
+  getDevice: async (deviceId) => (await apiClient.get(`/devices/${encodeURIComponent(deviceId)}`)).data,
+  prepareSanitization: async (caseId, payload) =>
+    (await apiClient.post(`/cases/${caseId}/sanitization/prepare`, payload)).data,
+  startSanitization: async (caseId, payload) =>
+    (await apiClient.post(`/cases/${caseId}/sanitization/start`, payload, { timeout: 0 })).data,
+};
+
+export const acquisitionApi = {
+  start: async (caseId, payload) =>
+    (await apiClient.post(`/cases/${caseId}/acquisition/start`, payload, { timeout: 20000 })).data,
+  getJob: async (jobId) =>
+    (await apiClient.get(`/acquisition/${encodeURIComponent(jobId)}`)).data,
 };
 
 export const forensicApi = {
@@ -463,22 +481,8 @@ export const sanitizationApi = {
       const res = await apiClient.post(`/cases/${caseId}/sanitize`, payload);
       return res.data;
     } catch (err) {
-      console.warn('Backend offline or sanitization error, using mock sanitization response:', err.message);
-      const jobId = `SAN-${Math.floor(10000 + Math.random() * 90000)}`;
-      return {
-        success: true,
-        data: {
-          jobId,
-          sanitizationId: jobId,
-          status: 'COMPLETED',
-          target: payload?.target || 'Target Storage Volume',
-          method: payload?.method || 'DEVICE_SECURE_ERASE',
-          mediaType: payload?.mediaType || 'SSD',
-          verification: 'PASSED',
-          timestamp: new Date().toISOString(),
-          certificateId: `CERT-${Math.floor(10000 + Math.random() * 90000)}`,
-        }
-      };
+      console.error('Dry-run sanitization request failed:', err.message);
+      throw err;
     }
   },
 
@@ -495,15 +499,6 @@ export const sanitizationApi = {
     try {
       const res = await apiClient.get(`/sanitize/${sanitizationId}`);
       return res.data;
-    } catch (err) {
-      return {
-        success: true,
-        data: {
-          sanitizationId,
-          status: 'COMPLETED',
-          verification: 'PASSED',
-        }
-      };
-    }
+    } catch (err) { throw err; }
   }
 };

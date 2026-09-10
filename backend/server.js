@@ -29,6 +29,7 @@ import sanitizationRoutes from './routes/sanitization.routes.js';
 import auditRoutes from './routes/audit.routes.js';
 import reportRoutes from './routes/report.routes.js';
 import forensicRoutes from './routes/forensic.routes.js';
+import nativeAgentRoutes from './routes/nativeAgent.routes.js';
 
 
 const app = express();
@@ -98,6 +99,7 @@ app.use('/api/v1', sanitizationRoutes);
 app.use('/api/v1', auditRoutes);
 app.use('/api/v1', reportRoutes);
 app.use('/api/v1', forensicRoutes);
+app.use('/api/v1', nativeAgentRoutes);
 
 // Serve frontend static build if available
 const clientDistPath = path.resolve(__dirname, '../frontend/dist');
@@ -144,4 +146,3 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 export default app;
-
