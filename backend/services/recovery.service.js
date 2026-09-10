@@ -176,7 +176,7 @@ const recoveryService = {
           ? Math.round(artifact.confidence_score * 100)
           : 100;
 
-        const recoveredDoc = await RecoveredFile.create({
+        const recoveredDoc = await RecoveredFile.findOneAndUpdate({ recoveredFileId }, {
           recoveredFileId,
           jobId: job._id,
           evidenceId: evidence._id,
@@ -202,7 +202,7 @@ const recoveryService = {
             originalPath: originalPath,
             rawMetadata: artifact.metadata || {}
           }
-        });
+        }, { upsert: true, new: true, setDefaultsOnInsert: true });
         recoveredFiles.push(recoveredDoc);
       }
 
