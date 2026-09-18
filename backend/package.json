@@ -10,8 +10,7 @@
     ]
   },
   "scripts": {
-    "dev": "node --watch-path=controllers --watch-path=routes --watch-path=services --watch-path=models --watch-path=middleware --watch-path=validators --watch-path=config --watch-path=utils --watch-path=server.js server.js",
-    "seed:demo": "node scripts/seed-demo-user.js",
+    "dev": "node server.js",
     "test": "jest",
     "test:watch": "jest --watch"
   },

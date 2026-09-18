@@ -278,11 +278,11 @@ export const ForensicExplorer = ({ evidenceId, caseId, onBack }) => {
                 <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Evidence:</span>
                 <span className="font-mono font-bold text-slate-900 text-sm">{disk.image}</span>
                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-800">
-                  <CheckCircle2 className="w-3 h-3 mr-1" /> Verified E01
+                  <CheckCircle2 className="w-3 h-3 mr-1" /> Integrity Verified
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 mt-0.5">
-                {disk.partitioning} • {disk.diskSize} • Case {caseId || 'CASE-2026-58130'}
+                {disk.partitioning} • {disk.diskSize} • Case {caseId || 'Unknown'}
               </p>
             </div>
           </div>
@@ -745,6 +745,15 @@ export const ForensicExplorer = ({ evidenceId, caseId, onBack }) => {
                 <div className="flex items-center gap-1.5">
                   {selectedItem.id && (
                     <button
+                      onClick={() => loadPreview(selectedItem.id)}
+                      className="px-2.5 py-1 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 rounded text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      <Eye className="w-3 h-3" />
+                      <span>Preview</span>
+                    </button>
+                  )}
+                  {selectedItem.id && (
+                    <button
                       onClick={() => handleDownload(selectedItem.id, selectedItem.filename || selectedItem.originalName || selectedItem.name)}
                       className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer"
                     >
@@ -917,6 +926,26 @@ export const ForensicExplorer = ({ evidenceId, caseId, onBack }) => {
               )}
 
               {/* READABLE PRIMARY EVIDENCE: TEXT PREVIEW */}
+              {selectedItem.id && /\.pdf$/i.test(selectedItem.filename || selectedItem.name || '') && (
+                <div>
+                  <div className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">PDF Preview</div>
+                  <iframe
+                    title={selectedItem.filename || selectedItem.name}
+                    src={forensicApi.getArtifactPreviewUrl(evidenceId, selectedItem.id)}
+                    className="h-[480px] w-full rounded border border-slate-200 bg-slate-50"
+                  />
+                </div>
+              )}
+              {previewData?.previewType === 'image' && selectedItem.id && (
+                <div>
+                  <div className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">Image Preview</div>
+                  <img
+                    src={forensicApi.getArtifactPreviewUrl(evidenceId, selectedItem.id)}
+                    alt={selectedItem.filename || selectedItem.name || 'Recovered artifact'}
+                    className="max-h-[420px] max-w-full rounded border border-slate-200 object-contain"
+                  />
+                </div>
+              )}
               {previewData?.textContent && (
                 <div>
                   <div className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">Text Content</div>

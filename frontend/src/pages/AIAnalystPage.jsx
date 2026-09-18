@@ -68,20 +68,13 @@ export const AIAnalystPage = () => {
       if (evList.length > 0) {
         setEvidence(evList[0]);
       } else {
-        // Fallback: create mock evidence reference so analyst can still search disk report.json
-        setEvidence({
-          evidenceId: cId,
-          caseId: cId,
-          originalFilename: `${cId}_disk_image.E01`
-        });
+        setEvidence(null);
+        setError('Upload and analyze an evidence image before using the forensic analyst.');
       }
     } catch (err) {
-      console.warn('Could not load evidence for case, using case identifier:', err);
-      setEvidence({
-        evidenceId: cId,
-        caseId: cId,
-        originalFilename: `${cId}_disk_image.E01`
-      });
+      console.error('Could not load evidence for case:', err);
+      setEvidence(null);
+      setError('Could not load evidence for this case.');
     } finally {
       setLoadingEvidence(false);
     }
@@ -183,4 +176,3 @@ export const AIAnalystPage = () => {
 };
 
 export default AIAnalystPage;
-

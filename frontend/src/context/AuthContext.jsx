@@ -3,6 +3,16 @@ import { authApi } from '../services/api';
 
 const AuthContext = createContext(null);
 
+const isTokenExpired = (value) => {
+  try {
+    const payload = value.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const { exp } = JSON.parse(atob(payload));
+    return !Number.isFinite(exp) || exp * 1000 <= Date.now();
+  } catch {
+    return true;
+  }
+};
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
@@ -13,7 +23,7 @@ export const AuthProvider = ({ children }) => {
     const savedToken = localStorage.getItem('token');
     const savedUser = localStorage.getItem('user');
 
-    if (savedToken && savedUser) {
+    if (savedToken && savedUser && !isTokenExpired(savedToken)) {
       try {
         setToken(savedToken);
         setUser(JSON.parse(savedUser));
@@ -22,8 +32,20 @@ export const AuthProvider = ({ children }) => {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
       }
+    } else if (savedToken || savedUser) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
     }
     setIsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setToken(null);
+      setUser(null);
+    };
+    window.addEventListener('cyphora:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('cyphora:unauthorized', handleUnauthorized);
   }, []);
 
   const login = async (email, password) => {

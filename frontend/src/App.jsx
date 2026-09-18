@@ -9,6 +9,7 @@ import { SanitizationPage } from './pages/SanitizationPage';
 import { AuditPage } from './pages/AuditPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { AIAnalystPage } from './pages/AIAnalystPage';
+import { ForensicExplorerPage } from './pages/ForensicExplorerPage';
 import { AppLayout } from './components/layout/AppLayout';
 
 export const App = () => {
@@ -24,6 +25,7 @@ export const App = () => {
         <Route path="/cases" element={<CasesPage />} />
         <Route path="/cases/:caseId" element={<CaseDetailsPage />} />
         <Route path="/cases/:caseId/recovery" element={<RecoveryWorkflowPage />} />
+        <Route path="/cases/:caseId/evidence/:evidenceId/explorer" element={<ForensicExplorerPage />} />
         <Route path="/cases/:caseId/analyst" element={<AIAnalystPage />} />
         <Route path="/cases/:caseId/forensic-analyst" element={<AIAnalystPage />} />
         <Route path="/recovery" element={<RecoveryWorkflowPage />} />
@@ -42,4 +44,3 @@ export const App = () => {
 };
 
 export default App;
-

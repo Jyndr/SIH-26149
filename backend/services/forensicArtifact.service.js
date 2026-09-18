@@ -156,6 +156,11 @@ function parseUrlShortcut(filepath) {
 async function getReportPathForEvidence(evidence) {
   const recBase = storageService.getRecoveredStoragePath();
 
+  if (evidence?.evidenceId) {
+    const evidenceReport = path.join(recBase, evidence.evidenceId, 'report.json');
+    if (fs.existsSync(evidenceReport)) return evidenceReport;
+  }
+
   // 1. Direct path if evidence.caseId matches folder name
   if (evidence && evidence.caseId) {
     const candidate1 = path.join(recBase, String(evidence.caseId), 'report.json');
@@ -175,6 +180,14 @@ async function getReportPathForEvidence(evidence) {
       if (caseRecord && caseRecord.caseId) {
         const candidate2 = path.join(recBase, caseRecord.caseId, 'report.json');
         if (fs.existsSync(candidate2)) return candidate2;
+
+        const legacyBase = storageService.getLegacyRecoveredStoragePath();
+        if (legacyBase !== recBase) {
+          const legacyEvidenceReport = path.join(legacyBase, evidence.evidenceId, 'report.json');
+          if (fs.existsSync(legacyEvidenceReport)) return legacyEvidenceReport;
+          const legacyCaseReport = path.join(legacyBase, caseRecord.caseId, 'report.json');
+          if (fs.existsSync(legacyCaseReport)) return legacyCaseReport;
+        }
       }
     } catch (e) {
       // Ignore and fallback to directory scan

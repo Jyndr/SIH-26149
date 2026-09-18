@@ -103,6 +103,24 @@ const forensicController = {
     }
   },
 
+  streamFilePreview: async (req, res, next) => {
+    try {
+      const { evidenceId, fileId } = req.params;
+      const { filePath, filename } = await forensicArtifactService.getFileDownload(evidenceId, fileId);
+      res.set({
+        'Content-Disposition': `inline; filename="${filename.replaceAll('"', '')}"`,
+        'X-Content-Type-Options': 'nosniff'
+      });
+      res.type(filename);
+      res.sendFile(filePath);
+    } catch (error) {
+      if (error.message.includes('not found')) {
+        return res.status(404).json({ success: false, error: { message: error.message } });
+      }
+      next(error);
+    }
+  },
+
   downloadFile: async (req, res, next) => {
     try {
       const { evidenceId, fileId } = req.params;
@@ -159,4 +177,3 @@ const forensicController = {
 };
 
 export default forensicController;
-

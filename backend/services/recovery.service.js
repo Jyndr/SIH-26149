@@ -40,6 +40,18 @@ const evidenceAbsolutePath = (evidence) => {
   return inEvidenceDir;
 };
 
+const recoveryOutputCaseId = (evidence) => evidence.evidenceId;
+
+const removePreviousRecoveryOutput = async (evidence) => {
+  const outputRoot = storageService.getRecoveredStoragePath();
+  const outputDir = path.resolve(outputRoot, recoveryOutputCaseId(evidence));
+  const expectedPrefix = `${path.resolve(outputRoot)}${path.sep}`;
+  if (!outputDir.startsWith(expectedPrefix)) {
+    throw new Error('Unsafe recovery output directory');
+  }
+  await fs.promises.rm(outputDir, { recursive: true, force: true });
+};
+
 const failJob = async (jobId, evidence, message) => {
   if (evidence) {
     evidence.analysisStatus = 'FAILED';
@@ -154,10 +166,11 @@ const recoveryService = {
       await jobService.updateProgress(jobId, 20, 'carving files');
 
       const outputPath = storageService.getRecoveredStoragePath();
+      await removePreviousRecoveryOutput(evidence);
       const result = await pythonClient.recover(
         evidenceAbsolutePath(evidence),
         outputPath,
-        caseRecord.caseId,
+        recoveryOutputCaseId(evidence),
         { chunkSize: 4 * 1024 * 1024, maxCarveSize: 100 * 1024 * 1024 }
       );
 
@@ -261,11 +274,15 @@ const recoveryService = {
 
       // Check evidence's case
       if (evidence.caseId) {
-        let caseIdStr = String(evidence.caseId);
+        let caseIdStr = recoveryOutputCaseId(evidence);
+        const evidenceReportPath = path.join(recBase, caseIdStr, 'report.json');
+        if (fs.existsSync(evidenceReportPath)) reportPath = evidenceReportPath;
         const caseRecord = await Case.findById(evidence.caseId);
-        if (caseRecord && caseRecord.caseId) caseIdStr = caseRecord.caseId;
-        const p1 = path.join(recBase, caseIdStr, 'report.json');
-        if (fs.existsSync(p1)) reportPath = p1;
+        if (!reportPath && caseRecord && caseRecord.caseId) {
+          caseIdStr = caseRecord.caseId;
+          const p1 = path.join(recBase, caseIdStr, 'report.json');
+          if (fs.existsSync(p1)) reportPath = p1;
+        }
       }
 
       if (!reportPath && fs.existsSync(recBase)) {

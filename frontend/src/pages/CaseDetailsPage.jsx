@@ -106,7 +106,7 @@ export const CaseDetailsPage = () => {
             </div>
             <div className="flex items-center justify-between text-slate-600">
               <span className="text-slate-500">Lead Investigator:</span>
-              <span className="font-medium text-blue-700">Analyst (Demo User)</span>
+              <span className="font-medium text-blue-700">{caseData?.createdBy?.name || 'Unassigned'}</span>
             </div>
             <div className="flex items-center justify-between text-slate-600">
               <span className="text-slate-500">Evidence Items:</span>
@@ -270,7 +270,7 @@ export const CaseDetailsPage = () => {
                         </td>
                         <td className="py-3 px-4 text-right whitespace-nowrap">
                           <button
-                            onClick={() => navigate(`/cases/${caseId}/recovery`)}
+                            onClick={() => navigate(`/cases/${caseId}/evidence/${ev.evidenceId}/explorer`)}
                             className="text-xs text-blue-600 hover:text-blue-800 font-semibold hover:underline cursor-pointer"
                           >
                             Forensic Explorer
@@ -320,4 +320,3 @@ export const CaseDetailsPage = () => {
     </div>
   );
 };
-

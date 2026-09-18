@@ -6,6 +6,11 @@ import auth from '../middleware/auth.middleware.js';
 import { authorizeCaseAccess } from '../middleware/authorize.middleware.js';
 import storageService from '../services/storage/storage.service.js';
 
+const configuredUploadLimit = Number.parseInt(process.env.MAX_EVIDENCE_UPLOAD_BYTES || '', 10);
+const maxEvidenceUploadBytes = Number.isSafeInteger(configuredUploadLimit) && configuredUploadLimit > 0
+  ? configuredUploadLimit
+  : 20 * 1024 * 1024 * 1024;
+
 const router = express.Router();
 
 // Configure multer for file uploads
@@ -23,7 +28,7 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   limits: {
-    fileSize: 2 * 1024 * 1024 * 1024 // 2GB forensic images
+    fileSize: maxEvidenceUploadBytes
   },
   fileFilter: (req, file, cb) => {
     // Allow all file types for now, can be restricted later

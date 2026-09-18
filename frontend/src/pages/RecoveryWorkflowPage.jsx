@@ -68,6 +68,9 @@ export const RecoveryWorkflowPage = () => {
 
   // Step 5: File Details modal & Report state
   const [selectedFileDetail, setSelectedFileDetail] = useState(null);
+  const [previewFile, setPreviewFile] = useState(null);
+  const [previewData, setPreviewData] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [activeReport, setActiveReport] = useState(null);
   const [generatingReport, setGeneratingReport] = useState(false);
@@ -245,19 +248,6 @@ export const RecoveryWorkflowPage = () => {
     }
   };
 
-  // Demo forensic image
-  const handleUseDemoFile = () => {
-    const buffer = new Uint8Array(4096);
-    const jpegHeader = [0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00];
-    jpegHeader.forEach((b, i) => { buffer[512 + i] = b; });
-    for (let i = 512 + jpegHeader.length; i < 2048; i++) buffer[i] = 0xAA;
-    buffer[2048] = 0xFF; buffer[2049] = 0xD9;
-
-    const demoBlob = new Blob([buffer], { type: 'application/octet-stream' });
-    const demoFile = new File([demoBlob], 'seized_evidence_drive.dd', { type: 'application/octet-stream' });
-    setSelectedFile(demoFile);
-  };
-
   // STEP 3: Verify Integrity
   const handleVerifyIntegrity = async () => {
     if (!evidence) return;
@@ -293,13 +283,10 @@ export const RecoveryWorkflowPage = () => {
 
   // Poll Job execution
   const pollJobExecution = (jId) => {
-    let attempts = 0;
-    const maxAttempts = 60;
     setJobStatus('RUNNING');
     setCurrentStageIndex(0);
 
     const interval = setInterval(async () => {
-      attempts++;
       try {
         const jobRes = await jobsApi.getById(jId);
         if (jobRes && jobRes.data) {
@@ -325,20 +312,13 @@ export const RecoveryWorkflowPage = () => {
           } else if (status === 'FAILED') {
             clearInterval(interval);
             setJobStatus('FAILED');
+            setUploadError(job.error?.message || job.error || 'Recovery failed. Review the job details and try again.');
           }
         }
       } catch (err) {
         console.warn('Polling job error:', err);
       }
 
-      if (attempts >= maxAttempts) {
-        clearInterval(interval);
-        if (jobStatus !== 'COMPLETED') {
-          setJobStatus('COMPLETED');
-          setCurrentStageIndex(5);
-          loadRecoveredFiles(evidence.evidenceId);
-        }
-      }
     }, 1000);
   };
 
@@ -393,6 +373,26 @@ export const RecoveryWorkflowPage = () => {
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
+  };
+
+  const handlePreviewArtifact = async (file) => {
+    const artifactId = file.metadata?.artifactId || file.artifactId;
+    if (!evidence?.evidenceId || !artifactId) {
+      setUploadError('This artifact is not available for preview. Run recovery again to refresh its record.');
+      return;
+    }
+
+    setPreviewFile(file);
+    setPreviewData(null);
+    setPreviewLoading(true);
+    try {
+      const response = await forensicApi.getFilePreview(evidence.evidenceId, artifactId);
+      setPreviewData(response.data || null);
+    } catch (error) {
+      setUploadError(error.response?.data?.error?.message || 'Could not load the artifact preview.');
+    } finally {
+      setPreviewLoading(false);
+    }
   };
 
   // Download Report
@@ -482,7 +482,7 @@ export const RecoveryWorkflowPage = () => {
                 <span>Recovery Pipeline</span>
               </button>
               <button
-                onClick={() => setViewMode('EXPLORER')}
+                onClick={() => navigate(`/cases/${selectedCaseId}/evidence/${evidence.evidenceId}/explorer`)}
                 className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${viewMode === 'EXPLORER' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
                   }`}
               >
@@ -641,6 +641,7 @@ export const RecoveryWorkflowPage = () => {
                     <input
                       type="file"
                       id="diskImageInput"
+                      accept=".img,.dd,.raw,.e01,.E01,application/octet-stream"
                       onChange={(e) => setSelectedFile(e.target.files[0])}
                       className="hidden"
                     />
@@ -652,7 +653,7 @@ export const RecoveryWorkflowPage = () => {
                       <div className="text-xs text-slate-500">
                         {selectedFile
                           ? `${(selectedFile.size / (1024 * 1024)).toFixed(2)} MB ready for ingestion`
-                          : 'Raw bitstream disk image or forensic container (up to 2GB demo limit)'}
+                          : 'Raw bitstream disk image or forensic container'}
                       </div>
                     </label>
                   </div>
@@ -679,15 +680,7 @@ export const RecoveryWorkflowPage = () => {
                     </div>
                   )}
 
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
-                    <button
-                      type="button"
-                      onClick={handleUseDemoFile}
-                      className="text-xs text-blue-600 hover:text-blue-800 font-medium hover:underline cursor-pointer"
-                    >
-                      Use Demo Forensic Image (.dd)
-                    </button>
-
+                  <div className="flex justify-end pt-1">
                     <button
                       type="submit"
                       disabled={!selectedFile || uploading}
@@ -719,7 +712,7 @@ export const RecoveryWorkflowPage = () => {
                   <div className="flex items-center justify-between">
                     <span className="text-slate-500">Detected Filesystem:</span>
                     <span className="font-medium text-slate-800 bg-white border border-slate-200 px-2 py-0.5 rounded">
-                      EXT4 (Partition 1)
+                      {evidence.filesystem?.type || evidence.filesystem?.filesystem || 'Not analyzed yet'}
                     </span>
                   </div>
                 </div>
@@ -872,7 +865,7 @@ export const RecoveryWorkflowPage = () => {
                 {evidence && (
                   <button
                     type="button"
-                    onClick={() => setViewMode('EXPLORER')}
+                    onClick={() => navigate(`/cases/${selectedCaseId}/evidence/${evidence.evidenceId}/explorer`)}
                     className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
                   >
                     <Layers className="w-3.5 h-3.5" />
@@ -1005,11 +998,20 @@ export const RecoveryWorkflowPage = () => {
                           <td className="py-2.5 px-4 text-right whitespace-nowrap">
                             <div className="inline-flex items-center gap-1.5">
                               <button
+                                onClick={() => handlePreviewArtifact(file)}
+                                title="Preview File"
+                                className="inline-flex items-center gap-1 px-2 py-1 text-slate-600 hover:text-blue-700 hover:bg-blue-50 border border-slate-200 rounded transition-colors cursor-pointer"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>Preview</span>
+                              </button>
+                              <button
                                 onClick={() => handleDownloadArtifact(file)}
                                 title="Download File"
-                                className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors cursor-pointer"
+                                className="inline-flex items-center gap-1 px-2 py-1 text-slate-600 hover:text-blue-700 hover:bg-blue-50 border border-slate-200 rounded transition-colors cursor-pointer"
                               >
                                 <Download className="w-3.5 h-3.5" />
+                                <span>Download</span>
                               </button>
                               <button
                                 onClick={() => setSelectedFileDetail(file)}
@@ -1128,6 +1130,52 @@ export const RecoveryWorkflowPage = () => {
               >
                 <Download className="w-4 h-4" />
                 <span>Export Artifact</span>
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={!!previewFile}
+        onClose={() => { setPreviewFile(null); setPreviewData(null); }}
+        title={`Preview: ${previewFile?.filename || ''}`}
+        maxWidth="max-w-4xl"
+      >
+        {previewFile && (
+          <div className="space-y-4 text-xs">
+            {previewLoading ? (
+              <div className="py-12 text-center text-slate-500">Loading artifact preview...</div>
+            ) : previewData?.previewType === 'image' ? (
+              <img
+                src={forensicApi.getArtifactPreviewUrl(evidence.evidenceId, previewFile.metadata?.artifactId || previewFile.artifactId)}
+                alt={previewFile.filename}
+                className="max-h-[65vh] max-w-full mx-auto rounded border border-slate-200 object-contain"
+              />
+            ) : previewFile.filename?.toLowerCase().endsWith('.pdf') ? (
+              <iframe
+                title={previewFile.filename}
+                src={forensicApi.getArtifactPreviewUrl(evidence.evidenceId, previewFile.metadata?.artifactId || previewFile.artifactId)}
+                className="w-full h-[65vh] border border-slate-200 rounded"
+              />
+            ) : previewData?.textContent ? (
+              <pre className="max-h-[65vh] overflow-auto whitespace-pre-wrap rounded border border-slate-200 bg-slate-50 p-4 font-mono text-xs text-slate-800">
+                {previewData.textContent}
+              </pre>
+            ) : previewData?.hexDump ? (
+              <pre className="max-h-[65vh] overflow-auto rounded bg-slate-950 p-4 font-mono text-[11px] text-emerald-300">
+                {previewData.hexDump.map((line) => `${line.offset}  ${line.hex}  ${line.ascii}`).join('\n')}
+              </pre>
+            ) : (
+              <p className="text-slate-500">A readable preview is not available for this file type. You can still download the recovered artifact.</p>
+            )}
+            <div className="flex justify-end border-t border-slate-200 pt-3">
+              <button
+                type="button"
+                onClick={() => handleDownloadArtifact(previewFile)}
+                className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-xs font-medium text-white hover:bg-blue-700"
+              >
+                <Download className="w-4 h-4" /> Download
               </button>
             </div>
           </div>

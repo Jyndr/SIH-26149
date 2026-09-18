@@ -8,10 +8,10 @@ import { findEvidenceByParam } from '../utils/ids.js';
 import logger from '../utils/logger.js';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 
 const generateEvidenceId = () => {
-  const random = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
-  return `EVD-${random}`;
+  return `EVD-${crypto.randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase()}`;
 };
 
 const evidenceService = {
@@ -51,14 +51,17 @@ const evidenceService = {
   },
 
   upload: async (file, caseId, userId) => {
+    let fullPath;
+    let fileMoved = false;
     try {
       const evidenceId = generateEvidenceId();
       const storedFilename = storageService.generateStoredFilename(evidenceId, file.originalname);
       const storagePath = path.join('evidence', storedFilename);
-      const fullPath = path.join(storageService.getEvidenceStoragePath(), storedFilename);
+      fullPath = path.join(storageService.getEvidenceStoragePath(), storedFilename);
 
       // Move file to storage
       await fs.promises.rename(file.path, fullPath);
+      fileMoved = true;
 
       // Compute SHA-256
       const sha256 = await hashService.computeSHA256FromFile(fullPath);
@@ -98,6 +101,11 @@ const evidenceService = {
       logger.info(`Evidence uploaded: ${evidenceId}`);
       return evidence;
     } catch (error) {
+      if (fileMoved && fullPath) {
+        await fs.promises.unlink(fullPath).catch(() => {});
+      } else if (file?.path) {
+        await fs.promises.unlink(file.path).catch(() => {});
+      }
       logger.error(`Error uploading evidence: ${error.message}`);
       throw error;
     }

@@ -31,22 +31,11 @@ apiClient.interceptors.response.use(
       // Clear token on 401 unauthorized
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+      window.dispatchEvent(new Event('cyphora:unauthorized'));
     }
     return Promise.reject(error);
   }
 );
-
-// ==========================================
-// FORENSIC DATA STORAGE (LOCAL CLIENT CACHE)
-// ==========================================
-const mockStorage = {
-  cases: [],
-  evidence: [],
-  jobs: {},
-  recoveredFiles: {},
-  reports: {},
-  auditLogs: {}
-};
 
 // ==========================================
 // UNIFIED API SERVICE EXPORTS
@@ -54,142 +43,42 @@ const mockStorage = {
 
 export const authApi = {
   login: async (email, password) => {
-    try {
-      const res = await apiClient.post('/auth/login', { email, password });
-      return res.data;
-    } catch (err) {
-      console.warn('Backend offline or error, using session:', err.message);
-      const mockUser = {
-        userId: 'USR-' + Math.floor(1000 + Math.random() * 9000),
-        name: email.split('@')[0],
-        email: email.toLowerCase(),
-        role: 'INVESTIGATOR',
-      };
-      const mockToken = 'mock_jwt_token_jyndr_forensics_' + Date.now();
-      return {
-        success: true,
-        data: {
-          user: mockUser,
-          token: mockToken,
-        },
-      };
-    }
+    const res = await apiClient.post('/auth/login', { email, password });
+    return res.data;
   },
 
   register: async (userData) => {
-    try {
-      const res = await apiClient.post('/auth/register', userData);
-      return res.data;
-    } catch (err) {
-      console.warn('Backend offline, using register fallback:', err.message);
-      return {
-        success: true,
-        data: {
-          userId: 'USR-' + Math.floor(10000 + Math.random() * 90000),
-          name: userData.name,
-          email: userData.email,
-          role: 'INVESTIGATOR',
-        },
-      };
-    }
+    const res = await apiClient.post('/auth/register', userData);
+    return res.data;
   },
 
   me: async () => {
-    try {
-      const res = await apiClient.get('/auth/me');
-      return res.data;
-    } catch (err) {
-      const storedUser = localStorage.getItem('user');
-      if (storedUser) {
-        return { success: true, data: JSON.parse(storedUser) };
-      }
-      throw err;
-    }
+    const res = await apiClient.get('/auth/me');
+    return res.data;
   },
 };
 
 export const casesApi = {
   list: async () => {
-    try {
-      const res = await apiClient.get('/cases');
-      return res.data;
-    } catch (err) {
-      console.warn('Backend offline, returning local cases:', err.message);
-      return { success: true, data: mockStorage.cases || [] };
-    }
+    const res = await apiClient.get('/cases');
+    return res.data;
   },
 
   getById: async (caseId) => {
-    try {
-      const res = await apiClient.get(`/cases/${caseId}`);
-      return res.data;
-    } catch (err) {
-      const found = mockStorage.cases.find((c) => c.caseId === caseId);
-      if (found) return { success: true, data: found };
-      return {
-        success: true,
-        data: {
-          caseId,
-          title: `Investigation Case ${caseId}`,
-          description: 'Cryptographic digital forensic investigation workspace.',
-          status: 'OPEN',
-          createdAt: new Date().toISOString(),
-          investigators: ['Analyst'],
-          evidenceCount: (mockStorage.evidence.filter((e) => e.caseId === caseId)).length,
-        },
-      };
-    }
+    const res = await apiClient.get(`/cases/${caseId}`);
+    return res.data;
   },
 
   create: async ({ title, description }) => {
-    try {
-      const res = await apiClient.post('/cases', { title, description });
-      return res.data;
-    } catch (err) {
-      console.warn('Backend offline, creating mock case:', err.message);
-      const randomId = Math.floor(10000 + Math.random() * 90000);
-      const newCase = {
-        caseId: `CASE-${randomId}`,
-        title: title || `Case-${randomId}`,
-        description: description || 'Digital forensic examination case.',
-        status: 'OPEN',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        investigators: ['Analyst'],
-        evidenceCount: 0,
-      };
-      mockStorage.cases.unshift(newCase);
-      // Also seed an audit record
-      if (!mockStorage.auditLogs[newCase.caseId]) {
-        mockStorage.auditLogs[newCase.caseId] = [
-          {
-            logId: `AUD-${Date.now()}`,
-            operation: 'CASE_CREATION',
-            caseId: newCase.caseId,
-            user: 'Analyst',
-            timestamp: new Date().toISOString(),
-            status: 'SUCCESS',
-            method: 'WEB_CONSOLE',
-            hash: '4d65a8829f0e81b67204910e58849bca0129845012384a958210398450284712',
-            previousHash: '0000000000000000000000000000000000000000000000000000000000000000'
-          }
-        ];
-      }
-      return { success: true, data: newCase };
-    }
+    const res = await apiClient.post('/cases', { title, description });
+    return res.data;
   },
 };
 
 export const evidenceApi = {
   listByCase: async (caseId) => {
-    try {
-      const res = await apiClient.get(`/cases/${caseId}/evidence`);
-      return res.data;
-    } catch (err) {
-      console.warn(`Backend offline, listing mock evidence for ${caseId}:`, err.message);
-      const evidence = mockStorage.evidence.filter((e) => e.caseId === caseId);
-      return { success: true, data: evidence };
-    }
+    const res = await apiClient.get(`/cases/${caseId}/evidence`);
+    return res.data;
   },
 
   upload: async (caseId, file, onUploadProgress) => {
@@ -204,14 +93,8 @@ export const evidenceApi = {
   },
 
   getById: async (evidenceId) => {
-    try {
-      const res = await apiClient.get(`/evidence/${evidenceId}`);
-      return res.data;
-    } catch (err) {
-      const item = mockStorage.evidence.find((e) => e.evidenceId === evidenceId);
-      if (item) return { success: true, data: item };
-      throw err;
-    }
+    const res = await apiClient.get(`/evidence/${evidenceId}`);
+    return res.data;
   },
 
   verifyIntegrity: async (evidenceId) => {
@@ -281,6 +164,11 @@ export const forensicApi = {
   getFilePreview: async (evidenceId, fileId) => {
     const res = await apiClient.get(`/evidence/${evidenceId}/file-preview/${fileId}`);
     return res.data;
+  },
+  getArtifactPreviewUrl: (evidenceId, fileId) => {
+    const token = localStorage.getItem('token');
+    const query = token ? `?token=${encodeURIComponent(token)}` : '';
+    return `${API_BASE_URL}/evidence/${evidenceId}/file-preview-content/${fileId}${query}`;
   },
   getDownloadUrl: (recoveredFileId) => {
     const token = localStorage.getItem('token');
@@ -352,11 +240,7 @@ export const reportsApi = {
       }
       return res.data;
     } catch (err) {
-      if (caseId && caseId !== 'ALL' && mockStorage.reports[caseId]) {
-        return { success: true, data: mockStorage.reports[caseId] };
-      }
-      const allReports = Object.values(mockStorage.reports).flat();
-      return { success: true, data: allReports };
+      throw err;
     }
   },
 
@@ -369,44 +253,7 @@ export const reportsApi = {
       const res = await apiClient.post(`/cases/${caseId}/reports`, body);
       return res.data;
     } catch (err) {
-      const reportId = `REP-${caseId.replace('CASE-', '')}-${Math.floor(10 + Math.random() * 90)}`;
-      const newReport = {
-        reportId,
-        caseId,
-        title: payload?.title || 'Forensic Recovery & Chain of Custody Report',
-        summary: payload?.summary || 'Deep file carving and inode reconstruction completed. All recovered artifacts cryptographically verified.',
-        status: 'FINALIZED',
-        createdAt: new Date().toISOString(),
-        sha256: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
-        generatedBy: 'Lead Forensic Analyst',
-        stats: {
-          totalFilesRecovered: 0,
-          validPass: 0,
-          validationFail: 0,
-          totalBytesCarved: 0,
-          durationSeconds: 0
-        }
-      };
-      if (!mockStorage.reports[caseId]) mockStorage.reports[caseId] = [];
-      mockStorage.reports[caseId].unshift(newReport);
-
-      // Audit log
-      if (mockStorage.auditLogs[caseId]) {
-        const prev = mockStorage.auditLogs[caseId][mockStorage.auditLogs[caseId].length - 1];
-        mockStorage.auditLogs[caseId].push({
-          logId: `AUD-${Date.now()}`,
-          operation: 'REPORT_FINALIZATION',
-          caseId,
-          user: 'Lead Forensic Analyst',
-          timestamp: new Date().toISOString(),
-          status: 'SEALED',
-          method: 'CRYPTOGRAPHIC_AUDIT_REPORT',
-          hash: newReport.sha256,
-          previousHash: prev ? prev.hash : '0000000000000000000000000000000000000000000000000000000000000000'
-        });
-      }
-
-      return { success: true, data: newReport };
+      throw err;
     }
   },
 
@@ -415,11 +262,7 @@ export const reportsApi = {
       const res = await apiClient.get(`/reports/${reportId}`);
       return res.data;
     } catch (err) {
-      for (const list of Object.values(mockStorage.reports)) {
-        const r = list.find(x => x.reportId === reportId);
-        if (r) return { success: true, data: r };
-      }
-      return { success: false, error: { message: 'Report not found' } };
+      throw err;
     }
   },
 };
@@ -448,11 +291,7 @@ export const auditApi = {
       }
       return res.data;
     } catch (err) {
-      if (caseId && caseId !== 'ALL' && mockStorage.auditLogs[caseId]) {
-        return { success: true, data: mockStorage.auditLogs[caseId] };
-      }
-      const allLogs = Object.values(mockStorage.auditLogs).flat();
-      return { success: true, data: allLogs };
+      throw err;
     }
   },
 
@@ -462,15 +301,7 @@ export const auditApi = {
       const res = await apiClient.get(endpoint);
       return res.data;
     } catch (err) {
-      return {
-        success: true,
-        data: {
-          valid: true,
-          total: 20,
-          checkedEntries: 20,
-          status: 'INTACT_UNBROKEN',
-        }
-      };
+      throw err;
     }
   }
 };

@@ -2,10 +2,13 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield, Key, Mail, AlertCircle, ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { authApi } from '../services/api';
 
 export const LoginPage = () => {
-  const [email, setEmail] = useState('demo@jyndr.com');
-  const [password, setPassword] = useState('demo123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [isRegistering, setIsRegistering] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -17,20 +20,24 @@ export const LoginPage = () => {
     setError('');
     setLoading(true);
 
-    const result = await login(email, password);
-    setLoading(false);
-
-    if (result.success) {
-      navigate('/dashboard');
-    } else {
-      setError(result.error || 'Invalid credentials. Please verify your email and password.');
+    try {
+      if (isRegistering) {
+        await authApi.register({ name, email, password });
+        setIsRegistering(false);
+        setError('Account created. Sign in with your new credentials.');
+      } else {
+        const result = await login(email, password);
+        if (result.success) {
+          navigate('/dashboard');
+        } else {
+          setError(result.error || 'Invalid credentials. Please verify your email and password.');
+        }
+      }
+    } catch (err) {
+      setError(err.response?.data?.error?.message || err.message || 'Could not create account.');
+    } finally {
+      setLoading(false);
     }
-  };
-
-  const handleFillDemo = () => {
-    setEmail('demo@jyndr.com');
-    setPassword('demo123');
-    setError('');
   };
 
   return (
@@ -43,7 +50,7 @@ export const LoginPage = () => {
             <Shield className="w-6 h-6" />
           </div>
           <h1 className="text-xl font-semibold text-slate-900 tracking-tight">
-            Sign in to Cyphora
+            {isRegistering ? 'Create your Cyphora account' : 'Sign in to Cyphora'}
           </h1>
           <p className="text-xs text-slate-500 mt-1">
             Digital forensics evidence recovery and secure data erasure
@@ -60,6 +67,19 @@ export const LoginPage = () => {
 
         {/* Login Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
+          {isRegistering && (
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1.5">Full Name</label>
+              <input
+                type="text"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Investigator name"
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900 text-sm placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all"
+              />
+            </div>
+          )}
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1.5">
               Email Address
@@ -102,28 +122,28 @@ export const LoginPage = () => {
             {loading ? (
               <span className="flex items-center gap-2">
                 <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                Signing In...
+                {isRegistering ? 'Creating Account...' : 'Signing In...'}
               </span>
             ) : (
               <span className="flex items-center gap-1.5">
-                Sign In
+                {isRegistering ? 'Create Account' : 'Sign In'}
                 <ArrowRight className="w-4 h-4" />
               </span>
             )}
           </button>
         </form>
 
-        {/* Demo Credentials Quick-Fill helper */}
-        <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-          <span>Demo Account:</span>
+        <div className="mt-6 pt-4 border-t border-slate-100 text-center text-xs text-slate-500">
+          {isRegistering ? 'Already have an account?' : 'New to Cyphora?'}{' '}
           <button
             type="button"
-            onClick={handleFillDemo}
+            onClick={() => { setIsRegistering((value) => !value); setError(''); }}
             className="text-blue-600 hover:text-blue-700 font-medium hover:underline cursor-pointer"
           >
-            Auto-fill demo credentials
+            {isRegistering ? 'Sign in' : 'Create an account'}
           </button>
         </div>
+
       </div>
 
       {/* Compliance Notice */}

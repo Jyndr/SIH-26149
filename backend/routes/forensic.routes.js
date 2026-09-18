@@ -11,10 +11,10 @@ router.get('/evidence/:evidenceId/files', forensicController.getFileTree);
 router.get('/evidence/:evidenceId/artifacts', forensicController.getArtifacts);
 router.get('/evidence/:evidenceId/search', forensicController.searchArtifacts);
 router.get('/evidence/:evidenceId/file-preview/:fileId', forensicController.getFilePreview);
+router.get('/evidence/:evidenceId/file-preview-content/:fileId', forensicController.streamFilePreview);
 router.get('/evidence/:evidenceId/file-download/:fileId', forensicController.downloadFile);
 router.get('/evidence/:evidenceId/report-download', forensicController.downloadReportJson);
 router.post('/evidence/:evidenceId/ask', forensicController.askAnalyst);
 router.get('/evidence/:evidenceId/analyst-status', forensicController.getAnalystStatus);
 
 export default router;
-

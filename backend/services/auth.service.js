@@ -2,10 +2,10 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import logger from '../utils/logger.js';
+import crypto from 'crypto';
 
 const generateUserId = () => {
-  const random = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
-  return `USR-${random}`;
+  return `USR-${crypto.randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase()}`;
 };
 
 const authService = {
@@ -68,10 +68,14 @@ const authService = {
         throw new Error('Invalid credentials');
       }
       
+      if (!process.env.JWT_SECRET) {
+        throw new Error('JWT_SECRET is not configured');
+      }
+
       // Generate JWT
       const token = jwt.sign(
         { userId: user._id, email: user.email, role: user.role },
-        process.env.JWT_SECRET || 'your-secret-key',
+        process.env.JWT_SECRET,
         { expiresIn: '24h' }
       );
       
